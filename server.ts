@@ -26,6 +26,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const JWT_SECRET = process.env.JWT_SECRET || "precision-logistics-secret-key";
 
 async function startServer() {
+  console.log("Starting server...");
   const app = express();
   const PORT = 3000;
 
@@ -48,6 +49,7 @@ async function startServer() {
 
   // Auth Routes
   app.post("/api/register", async (req, res) => {
+    console.log("POST /api/register", req.body.email);
     try {
       const { email, password } = req.body;
       if (!email || !password) return res.status(400).json({ error: "Email and password required" });
@@ -76,6 +78,7 @@ async function startServer() {
   });
 
   app.post("/api/login", async (req, res) => {
+    console.log("POST /api/login", req.body.email);
     try {
       const { email, password } = req.body;
       const userRef = doc(db, "users", email);
