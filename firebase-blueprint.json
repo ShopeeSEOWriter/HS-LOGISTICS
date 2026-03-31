@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "Truck": {
+      "title": "Truck",
+      "description": "A truck or container carrying shipments.",
+      "type": "object",
+      "properties": {
+        "truck_code": { "type": "string", "description": "Unique identifier for the truck." },
+        "status": { "type": "string", "description": "Current status of the truck." },
+        "last_updated": { "type": "string", "format": "date-time", "description": "Timestamp of the last status update." },
+        "order_count": { "type": "integer", "description": "Number of orders in this truck." }
+      },
+      "required": ["truck_code", "status", "last_updated"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A single shipment/order.",
+      "type": "object",
+      "properties": {
+        "tracking_code": { "type": "string", "description": "Unique tracking code for the order." },
+        "truck_code": { "type": "string", "description": "The truck this order is currently assigned to." },
+        "status": { "type": "string", "description": "Current status of the order." },
+        "destination": { "type": "string", "description": "Destination (HN for Hanoi, SG for Saigon)." },
+        "weight": { "type": "string", "description": "Weight of the shipment." },
+        "volume": { "type": "string", "description": "Volume (M3) of the shipment." },
+        "item_type": { "type": "string", "description": "Type of goods." },
+        "last_updated": { "type": "string", "format": "date-time", "description": "Timestamp of the last status update." }
+      },
+      "required": ["tracking_code", "status", "last_updated"]
+    },
+    "TrackingLog": {
+      "title": "Tracking Log",
+      "description": "History of status updates for an order.",
+      "type": "object",
+      "properties": {
+        "tracking_code": { "type": "string", "description": "The order this log belongs to." },
+        "status": { "type": "string", "description": "The status at this point in time." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the update occurred." },
+        "location": { "type": "string", "description": "Where the order was at this time." },
+        "note": { "type": "string", "description": "Optional note for the update." }
+      },
+      "required": ["tracking_code", "status", "timestamp"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A registered user in the system",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "password_hash": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "password_hash", "created_at"]
+    },
+    "UserTrackingHistory": {
+      "title": "UserTrackingHistory",
+      "description": "A tracking code searched by a user",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "tracking_code": { "type": "string" },
+        "last_checked_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "tracking_code", "last_checked_at"]
+    }
+  },
+  "firestore": {
+    "/trucks/{truckId}": {
+      "schema": "Truck",
+      "description": "Collection of trucks."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of orders."
+    },
+    "/tracking_logs/{logId}": {
+      "schema": "TrackingLog",
+      "description": "History of all order updates."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of registered users"
+    },
+    "/user_tracking_history/{historyId}": {
+      "schema": "UserTrackingHistory",
+      "description": "Collection of user tracking history"
+    }
+  }
+}

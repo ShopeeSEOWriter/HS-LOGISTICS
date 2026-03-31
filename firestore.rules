@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == "muadongnovact2@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    // Trucks
+    match /trucks/{truckId} {
+      allow read: if true;
+      allow write: if true; // Insecure: allow server (unauthenticated) to write
+    }
+
+    // Orders
+    match /orders/{orderId} {
+      allow read: if true;
+      allow write: if true; // Insecure: allow server (unauthenticated) to write
+    }
+
+    // Tracking Logs
+    match /tracking_logs/{logId} {
+      allow read: if true;
+      allow write: if true; // Insecure: allow server (unauthenticated) to write
+    }
+
+    // Users
+    match /users/{userId} {
+      allow get: if true; // Allow server to get user by email (ID)
+      allow list: if true;
+      allow create: if true; // Allow registration
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    // User Tracking History
+    match /user_tracking_history/{historyId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
+    }
+  }
+}

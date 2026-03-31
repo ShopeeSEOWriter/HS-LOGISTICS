@@ -1,0 +1,157 @@
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { User, Bell, HelpCircle, Search, Menu, Package, LogOut, History as HistoryIcon } from "lucide-react";
+import { cn } from "@/src/lib/utils";
+import { useAuth } from "../hooks/useAuth";
+
+export default function Navbar() {
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  const isOps = location.pathname.startsWith("/ops") || location.pathname.startsWith("/admin");
+  const [showUserMenu, setShowUserMenu] = React.useState(false);
+
+  return (
+    <nav className={cn(
+      "sticky top-0 z-50 w-full border-b border-surface-container/50 bg-surface/80 backdrop-blur-xl",
+      isOps && "ml-64 w-[calc(100%-16rem)]"
+    )}>
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-8">
+        <div className="flex items-center gap-8">
+          {!isOps && (
+            <Link to="/" className="flex flex-col">
+              <span className="font-headline text-xl font-black uppercase tracking-tighter text-primary leading-none">
+                HS Logistics
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-primary/60">
+                和晟越南货运
+              </span>
+            </Link>
+          )}
+          
+          {isOps ? (
+            <div className="flex items-center gap-8">
+              <div className="flex flex-col">
+                <h1 className="font-headline text-lg font-black leading-none text-on-surface">
+                  {location.pathname.startsWith("/admin") ? "Quản trị hệ thống" : "Cổng điều hành"}
+                </h1>
+                <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  {location.pathname.startsWith("/admin") ? "系统管理" : "运营门户网站"}
+                </span>
+              </div>
+              <div className="relative hidden w-80 md:block">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" />
+                <input 
+                  type="text" 
+                  placeholder="Tìm kiếm vận đơn hoặc khách hàng / 搜索单号或客户..."
+                  className="w-full rounded-full border-none bg-surface-container-low py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary-container"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="hidden items-center gap-8 md:flex">
+              <NavLink to="/" active={location.pathname === "/"}>
+                <span>Theo dõi</span>
+                <span className="text-[10px] opacity-70">追踪</span>
+              </NavLink>
+              <NavLink to="/history" active={location.pathname === "/history"}>
+                <span>Lịch sử</span>
+                <span className="text-[10px] opacity-70">历史</span>
+              </NavLink>
+              <NavLink to="/support" active={location.pathname === "/support"}>
+                <span>Hỗ trợ</span>
+                <span className="text-[10px] opacity-70">帮助</span>
+              </NavLink>
+              <NavLink to="/admin/trucks" active={location.pathname.startsWith("/admin")}>
+                <span>Quản trị</span>
+                <span className="text-[10px] opacity-70">管理</span>
+              </NavLink>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4">
+          {isOps && (
+            <div className="hidden items-center gap-2 rounded-full bg-primary/10 px-3 py-1 font-bold text-primary md:flex">
+              <Bell className="h-3 w-3 fill-current" />
+              <span className="text-[10px] uppercase">Cảnh báo toàn cầu / 全球警报</span>
+            </div>
+          )}
+          <div className="flex items-center gap-4 text-on-surface-variant">
+            <button className="hover:text-primary transition-colors">
+              <Bell className="h-5 w-5" />
+            </button>
+            <button className="hover:text-primary transition-colors">
+              <HelpCircle className="h-5 w-5" />
+            </button>
+            <div className="h-8 w-[1px] bg-surface-container mx-2" />
+            
+            {user ? (
+              <div className="relative">
+                <button 
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-3 focus:outline-none"
+                >
+                  <div className="hidden text-right md:block">
+                    <div className="text-xs font-bold text-on-surface">{user.email}</div>
+                    <div className="text-[9px] uppercase tracking-tighter text-on-surface-variant">
+                      {user.role === "admin" ? "Quản trị viên" : "Thành viên"}
+                    </div>
+                  </div>
+                  <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-primary/10 bg-primary/5 flex items-center justify-center">
+                    <User className="h-6 w-6 text-primary" />
+                  </div>
+                </button>
+
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-4 w-56 overflow-hidden rounded-3xl bg-surface-container-lowest shadow-2xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-2">
+                      <Link 
+                        to="/history" 
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all"
+                      >
+                        <HistoryIcon className="h-4 w-4" />
+                        <span>Lịch sử tra cứu</span>
+                      </Link>
+                      <button 
+                        onClick={() => {
+                          logout();
+                          setShowUserMenu(false);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-error hover:bg-error/10 transition-all"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span>Đăng xuất</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link 
+                to="/auth" 
+                className="rounded-full bg-on-background px-6 py-2 text-xs font-bold text-white shadow-lg transition-all hover:opacity-90 active:scale-95"
+              >
+                Đăng nhập
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function NavLink({ to, active, children }: { to: string, active: boolean, children: React.ReactNode }) {
+  return (
+    <Link 
+      to={to} 
+      className={cn(
+        "flex flex-col items-center text-sm font-medium transition-colors hover:text-primary",
+        active ? "border-b-2 border-primary font-extrabold text-primary" : "text-on-surface-variant"
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
