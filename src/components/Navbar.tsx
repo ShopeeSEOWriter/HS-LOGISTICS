@@ -3,12 +3,36 @@ import { Link, useLocation } from "react-router-dom";
 import { User, Bell, HelpCircle, Search, Menu, Package, LogOut, History as HistoryIcon } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useAuth } from "../hooks/useAuth";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import NotificationDropdown from "./NotificationDropdown";
 
 export default function Navbar() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const isOps = location.pathname.startsWith("/ops") || location.pathname.startsWith("/admin");
   const [showUserMenu, setShowUserMenu] = React.useState(false);
+  const [showNotifications, setShowNotifications] = React.useState(false);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+
+    const q = query(
+      collection(db, "notifications"),
+      where("user_id", "==", user.id),
+      where("read_status", "==", false)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setUnreadCount(snapshot.size);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   return (
     <nav className={cn(
@@ -77,9 +101,25 @@ export default function Navbar() {
             </div>
           )}
           <div className="flex items-center gap-4 text-on-surface-variant">
-            <button className="hover:text-primary transition-colors">
-              <Bell className="h-5 w-5" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative hover:text-primary transition-colors"
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white ring-2 ring-surface">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+              {showNotifications && user && (
+                <NotificationDropdown 
+                  userId={user.id} 
+                  onClose={() => setShowNotifications(false)} 
+                />
+              )}
+            </div>
             <button className="hover:text-primary transition-colors">
               <HelpCircle className="h-5 w-5" />
             </button>

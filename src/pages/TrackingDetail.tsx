@@ -1,31 +1,56 @@
 import React, { useState, useEffect } from "react";
-import { Package, Truck, MapPin, CheckCircle2, Clock, Info, Headset, Route, AlertCircle, RefreshCw, ChevronRight } from "lucide-react";
+import { Package, Truck, MapPin, CheckCircle2, Clock, Info, Headset, Route, AlertCircle, RefreshCw, ChevronRight, Scale } from "lucide-react";
 import { motion } from "motion/react";
 import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, collection, query, where, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { cn } from "@/src/lib/utils";
+import { cn } from "../lib/utils";
 import { format } from "date-fns";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 
 const STATUS_STEPS = [
-  "Đã bốc hàng",
+  "Đã tạo đơn hàng",
+  "Đã nhận tại kho Trung Quốc",
+  "Đã bốc hàng lên xe",
+  "Đã xuất kho Trung Quốc",
+  "Đang vận chuyển ra biên giới",
   "Đang làm thủ tục hải quan",
-  "Xe đã qua Việt Nam",
-  "Xe đang về kho Hà Nội",
+  "Đã thông quan",
+  "Đã về đến Việt Nam",
   "Đã về kho Hà Nội",
+  "Đang phân loại tại kho",
   "Đang giao hàng",
   "Đã giao hàng"
 ];
 
 const STATUS_CHINESE: Record<string, string> = {
-  "Đã bốc hàng": "已装车",
+  "Đã tạo đơn hàng": "已创建订单",
+  "Đã nhận tại kho Trung Quốc": "已入中国仓",
+  "Đã bốc hàng lên xe": "已装车",
+  "Đã xuất kho Trung Quốc": "已从中国发货",
+  "Đang vận chuyển ra biên giới": "前往边境中",
   "Đang làm thủ tục hải quan": "海关清关中",
-  "Xe đã qua Việt Nam": "车辆已入越南",
-  "Xe đang về kho Hà Nội": "车辆前往河内仓",
-  "Đã về kho Hà Nội": "已到河内仓库",
+  "Đã thông quan": "已完成清关",
+  "Đã về đến Việt Nam": "已入越南境",
+  "Đã về kho Hà Nội": "已到河内仓",
+  "Đang phân loại tại kho": "仓库分拣中",
   "Đang giao hàng": "派送中",
   "Đã giao hàng": "已送达"
+};
+
+const STATUS_LOCATIONS: Record<string, string> = {
+  "Đã tạo đơn hàng": "Hệ thống",
+  "Đã nhận tại kho Trung Quốc": "Trung Quốc",
+  "Đã bốc hàng lên xe": "Trung Quốc",
+  "Đã xuất kho Trung Quốc": "Trung Quốc",
+  "Đang vận chuyển ra biên giới": "Trung Quốc",
+  "Đang làm thủ tục hải quan": "Biên giới",
+  "Đã thông quan": "Biên giới",
+  "Đã về đến Việt Nam": "Việt Nam",
+  "Đã về kho Hà Nội": "Việt Nam",
+  "Đang phân loại tại kho": "Việt Nam",
+  "Đang giao hàng": "Việt Nam",
+  "Đã giao hàng": "Việt Nam"
 };
 
 export default function TrackingDetail() {
@@ -43,9 +68,6 @@ export default function TrackingDetail() {
     setLogs([]);
     setTruckOrders([]);
 
-    // We'll use a single effect to handle both order and truck lookup
-    // This avoids nested listeners and race conditions
-    
     const orderRef = doc(db, "orders", id);
     const truckRef = doc(db, "trucks", id);
 
@@ -73,11 +95,13 @@ export default function TrackingDetail() {
             });
 
             // If it's a truck, fetch the orders inside it
-            const q = query(collection(db, "orders"), where("truck_code", "==", id));
-            unsubTruckOrders = onSnapshot(q, (snapshot) => {
-              const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-              setTruckOrders(list);
-            }, (err) => handleFirestoreError(err, OperationType.LIST, "orders"));
+            if (id) {
+              const q = query(collection(db, "orders"), where("truck_code", "==", id));
+              unsubTruckOrders = onSnapshot(q, (snapshot) => {
+                const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                setTruckOrders(list);
+              }, (err) => handleFirestoreError(err, OperationType.LIST, "orders"));
+            }
 
           } else {
             setOrder(null);
@@ -94,35 +118,37 @@ export default function TrackingDetail() {
     });
 
     // Tracking logs for this ID (could be order code or truck code)
-    const logsQuery = query(
-      collection(db, "tracking_logs"),
-      where("tracking_code", "==", id),
-      orderBy("timestamp", "asc")
-    );
-    const unsubscribeLogs = onSnapshot(logsQuery, (snapshot) => {
-      const logList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      
-      // Filter duplicates by status, keeping only the latest one per status
-      const statusMap = new Map();
-      logList.forEach(log => {
-        statusMap.set(log.status, log);
-      });
-      
-      const uniqueLogs = Array.from(statusMap.values()).sort((a, b) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    if (id) {
+      const logsQuery = query(
+        collection(db, "tracking_logs"),
+        where("tracking_code", "==", id),
+        orderBy("timestamp", "asc")
       );
-      
-      setLogs(uniqueLogs);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, "tracking_logs");
-    });
+      const unsubscribeLogs = onSnapshot(logsQuery, (snapshot) => {
+        const logList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        
+        // Filter duplicates by status, keeping only the latest one per status
+        const statusMap = new Map();
+        logList.forEach(log => {
+          statusMap.set(log.status, log);
+        });
+        
+        const uniqueLogs = Array.from(statusMap.values()).sort((a, b) => 
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+        
+        setLogs(uniqueLogs);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, "tracking_logs");
+      });
 
-    return () => {
-      unsubOrder();
-      unsubTruck();
-      unsubTruckOrders();
-      unsubscribeLogs();
-    };
+      return () => {
+        unsubOrder();
+        unsubTruck();
+        unsubTruckOrders();
+        unsubscribeLogs();
+      };
+    }
   }, [id]);
 
   if (loading) {
@@ -165,6 +191,22 @@ export default function TrackingDetail() {
             </h1>
           </div>
           <div className="flex flex-col items-start gap-3 md:items-end">
+            {/* Delay Warning */}
+            {(() => {
+              const lastUpdate = new Date(order.last_updated);
+              const now = new Date();
+              const diffDays = Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24));
+              if (diffDays >= 3 && order.status !== "Đã giao hàng") {
+                return (
+                  <div className="flex items-center gap-2 rounded-lg bg-error/10 px-3 py-1.5 text-[10px] font-bold text-error animate-pulse">
+                    <AlertCircle className="h-3 w-3" />
+                    CẢNH BÁO: ĐƠN HÀNG CẬP NHẬT CHẬM ({diffDays} ngày)
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            
             <div className="flex items-center gap-3 rounded-full bg-secondary-container px-5 py-2 text-sm font-bold text-on-secondary-container shadow-sm">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75"></span>
@@ -172,9 +214,14 @@ export default function TrackingDetail() {
               </span>
               {order.status}
             </div>
-            <p className="text-sm font-medium text-on-surface-variant">
-              Cập nhật lúc: {format(new Date(order.last_updated), "dd/MM/yyyy HH:mm")}
-            </p>
+            <div className="flex flex-col items-start gap-1 md:items-end">
+              <p className="text-xs font-bold text-primary uppercase tracking-tighter">
+                Vị trí hiện tại: {STATUS_LOCATIONS[order.status] || "Đang cập nhật"}
+              </p>
+              <p className="text-[10px] font-medium text-on-surface-variant">
+                Cập nhật lần cuối: {format(new Date(order.last_updated), "dd/MM/yyyy HH:mm")}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -187,8 +234,13 @@ export default function TrackingDetail() {
               <>
                 <Stat label="Trọng lượng / 重量" value={order.weight || "N/A"} unit="kg" />
                 <Stat label="Thể tích / 体积" value={order.volume || "N/A"} unit="M3" />
+                <Stat 
+                  label="Cước phí / 运费" 
+                  value={order.total_cost ? new Intl.NumberFormat('vi-VN').format(order.total_cost) : "N/A"} 
+                  unit="VND" 
+                  icon={<Scale className="h-4 w-4" />}
+                />
                 <Stat label="Nơi đến / 目的地" value={order.destination || "N/A"} />
-                <Stat label="Mặt hàng / 货物类型" value={order.item_type || "Hàng hóa"} icon={<Package className="h-4 w-4" />} />
               </>
             ) : (
               <>
@@ -239,7 +291,7 @@ export default function TrackingDetail() {
                 subLabel={STATUS_CHINESE[log.status]}
                 time={format(new Date(log.timestamp), "dd/MM/yyyy HH:mm")}
                 description={log.note}
-                tag={log.location}
+                tag={log.location || STATUS_LOCATIONS[log.status]}
               />
             ))}
             
@@ -355,7 +407,9 @@ function Stat({ label, value, unit, icon }: any) {
 }
 
 function TimelineItem({ status, title, subLabel, time, description, tag }: any) {
-  const displayTag = tag === "Lạng Sơn" ? "Móng Cái" : tag;
+  const isChina = tag === "Trung Quốc" || tag === "Kho Trung Quốc";
+  const isVietnam = tag === "Việt Nam" || tag === "Hà Nội" || tag === "Nội địa VN" || tag === "Người nhận";
+  
   return (
     <div className="relative flex gap-6">
       <div className={cn(
@@ -372,12 +426,19 @@ function TimelineItem({ status, title, subLabel, time, description, tag }: any) 
         "flex-grow rounded-2xl p-4 transition-all",
         status === "active" && "bg-surface-container-low border-l-2 border-primary"
       )}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
           <div>
             <p className={cn("text-sm font-bold", status === "active" ? "text-primary" : "text-on-surface")}>{title}</p>
             {subLabel && <p className="text-[10px] font-medium opacity-50">{subLabel}</p>}
           </div>
-          {displayTag && <span className="rounded bg-surface-container-high px-2 py-0.5 text-[9px] font-bold uppercase">{displayTag}</span>}
+          {tag && (
+            <span className={cn(
+              "rounded px-2 py-0.5 text-[9px] font-bold uppercase",
+              isChina ? "bg-red-100 text-red-700" : isVietnam ? "bg-emerald-100 text-emerald-700" : "bg-surface-container-high"
+            )}>
+              {tag}
+            </span>
+          )}
         </div>
         {time && <p className="mt-1 text-xs text-on-surface-variant">{time}</p>}
         {description && <p className="mt-1 text-xs font-medium text-on-surface-variant">{description}</p>}

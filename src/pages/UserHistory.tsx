@@ -4,7 +4,8 @@ import { useAuth } from "../hooks/useAuth";
 import { Package, Clock, Trash2, ChevronRight, Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "../lib/utils";
 import { format } from "date-fns";
-import { collection, query, where, orderBy, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { getTrackingHistory } from "../services/historyService";
+import { doc, getDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 export default function UserHistory() {
@@ -19,20 +20,35 @@ export default function UserHistory() {
     if (!user) return;
     setLoading(true);
     try {
-      const q = query(
-        collection(db, "history"),
-        where("user_email", "==", user.email),
-        orderBy("created_at", "desc")
-      );
-      const querySnapshot = await getDocs(q);
-      const historyData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        // Map Firestore fields to expected component fields if necessary
-        last_checked_at: doc.data().created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
-        status: "Đã tra cứu"
+      const historyData = await getTrackingHistory(user.id);
+      
+      // Fetch status for each tracking code
+      const historyWithStatus = await Promise.all(historyData.map(async (item: any) => {
+        let status = "Không tìm thấy";
+        try {
+          // Try order first
+          const orderSnap = await getDoc(doc(db, "orders", item.tracking_code));
+          if (orderSnap.exists()) {
+            status = orderSnap.data().status;
+          } else {
+            // Try truck
+            const truckSnap = await getDoc(doc(db, "trucks", item.tracking_code));
+            if (truckSnap.exists()) {
+              status = truckSnap.data().status;
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching status for", item.tracking_code, e);
+        }
+
+        return {
+          ...item,
+          status,
+          last_checked_at: item.last_checked_at?.toDate?.()?.toISOString() || new Date().toISOString()
+        };
       }));
-      setHistory(historyData);
+
+      setHistory(historyWithStatus);
     } catch (err) {
       console.error("History fetch error:", err);
       setError("Không thể tải lịch sử.");
@@ -51,7 +67,7 @@ export default function UserHistory() {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDoc(doc(db, "history", id));
+      await deleteDoc(doc(db, "user_tracking_history", id));
       setHistory(history.filter((item) => item.id !== id));
     } catch (err) {
       console.error("Delete error:", err);

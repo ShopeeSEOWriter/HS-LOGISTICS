@@ -11,6 +11,7 @@ import cookieParser from "cookie-parser";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, getDocs, writeBatch, deleteDoc, orderBy, limit } from "firebase/firestore";
 import fs from "fs";
+import nodemailer from "nodemailer";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -141,6 +142,63 @@ async function startServer() {
     res.clearCookie("token");
     res.json({ success: true });
   });
+
+  // Notification Helper
+  const createNotifications = async (trackingCodes: string[], status: string, location: string) => {
+    try {
+      for (const code of trackingCodes) {
+        const historyQuery = query(
+          collection(db, "user_tracking_history"),
+          where("tracking_code", "==", code)
+        );
+        const historySnap = await getDocs(historyQuery);
+        
+        const batch = writeBatch(db);
+        const now = new Date().toISOString();
+
+        for (const historyDoc of historySnap.docs) {
+          const userData = historyDoc.data();
+          const notificationRef = doc(collection(db, "notifications"));
+          const message = `Đơn hàng ${code} đã cập nhật trạng thái: ${status} tại ${location}`;
+          
+          batch.set(notificationRef, {
+            user_id: userData.user_id,
+            tracking_code: code,
+            message,
+            read_status: false,
+            created_at: now,
+            type: "status_update"
+          });
+
+          // Send Email (Mock/Log for now, or use nodemailer if configured)
+          if (process.env.SMTP_HOST && userData.user_email) {
+            const transporter = nodemailer.createTransport({
+              host: process.env.SMTP_HOST,
+              port: parseInt(process.env.SMTP_PORT || "587"),
+              secure: process.env.SMTP_SECURE === "true",
+              auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+              },
+            });
+
+            transporter.sendMail({
+              from: `"HS Logistics" <${process.env.SMTP_USER}>`,
+              to: userData.user_email,
+              subject: `Cập nhật vận đơn ${code}`,
+              text: message,
+              html: `<p>${message}</p><p><a href="https://ais-dev-lxmmkoo75qo6bljqocelpa-210931501535.asia-east1.run.app/tracking/${code}">Xem chi tiết tại đây</a></p>`,
+            }).catch(e => console.error("Email send error:", e));
+          } else {
+            console.log(`[Email Notification] To: ${userData.user_email || userData.user_id}, Msg: ${message}`);
+          }
+        }
+        await batch.commit();
+      }
+    } catch (error) {
+      console.error("Notification creation error:", error);
+    }
+  };
 
   // Tracking History Routes
   app.post("/api/track", async (req: any, res) => {
@@ -366,6 +424,9 @@ async function startServer() {
 
       await batch.commit();
 
+      // Notify users
+      createNotifications(ordersToProcess.map(o => o.trackingCode), "Đã bốc hàng", "Đông Hưng");
+
       res.json({ success: true, results: { truckCode, count: ordersToProcess.length } });
     } catch (error: any) {
       console.error("Excel upload error:", error);
@@ -475,6 +536,10 @@ async function startServer() {
       }
 
       await batch.commit();
+      
+      // Notify users
+      createNotifications(Array.from(processedCodes), status, location || "N/A");
+
       res.json({ success: true, count: processedCodes.size });
     } catch (error: any) {
       console.error("Bulk update error:", error);
@@ -534,6 +599,11 @@ async function startServer() {
       });
 
       await batch.commit();
+
+      // Notify users
+      const trackingCodes = ordersSnap.docs.map(d => d.id);
+      createNotifications(trackingCodes, status, location || "N/A");
+
       res.json({ success: true });
     } catch (error: any) {
       console.error("Update truck status error:", error);
@@ -599,10 +669,18 @@ async function startServer() {
     try {
       const orderId = req.params.id;
       const orderRef = doc(db, "orders", orderId);
+      const orderSnap = await getDoc(orderRef);
+      const oldStatus = orderSnap.exists() ? orderSnap.data().status : null;
+      
       await updateDoc(orderRef, {
         ...req.body,
         last_updated: new Date().toISOString()
       });
+
+      if (req.body.status && req.body.status !== oldStatus) {
+        createNotifications([orderId], req.body.status, req.body.location || "N/A");
+      }
+
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

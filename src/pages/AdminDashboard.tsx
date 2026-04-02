@@ -7,10 +7,15 @@ import { useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, Package, Truck, MapPin, Search, Filter, 
   Upload, CheckCircle2, AlertCircle, LogOut, ChevronRight, 
-  MoreHorizontal, Plus, Download, FileSpreadsheet, RefreshCw
+  MoreHorizontal, Plus, Download, FileSpreadsheet, RefreshCw,
+  Eye, TrendingUp, BarChart3, PieChart as PieChartIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "../lib/utils";
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, Cell, PieChart, Pie, Legend 
+} from 'recharts';
 
 const STEPS = [
   "Order created",
@@ -23,6 +28,18 @@ const STEPS = [
   "Out for delivery",
   "Delivered"
 ];
+
+const STATUS_COLORS: Record<string, string> = {
+  "Order created": "#94a3b8",
+  "Received at China warehouse": "#fbbf24",
+  "Packed into truck/container": "#f59e0b",
+  "Departed China": "#ea580c",
+  "Customs clearance": "#6366f1",
+  "Arrived Vietnam": "#10b981",
+  "Arrived Hanoi warehouse": "#059669",
+  "Out for delivery": "#8b5cf6",
+  "Delivered": "#22c55e"
+};
 
 const TRUCK_ACTIONS = [
   { label: "Đã bốc hàng lên xe", status: "Packed into truck/container", location: "China Warehouse" },
@@ -42,6 +59,7 @@ export default function AdminDashboard() {
   const [filterStatus, setFilterStatus] = useState("All");
   const [uploading, setUploading] = useState(false);
   const [selectedTruck, setSelectedTruck] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error", text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -54,7 +72,8 @@ export default function AdminDashboard() {
     setLoading(true);
     try {
       const ordersSnapshot = await getDocs(collection(db, "orders"));
-      setOrders(ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setOrders(ordersData);
 
       const trucksSnapshot = await getDocs(collection(db, "trucks"));
       setTrucks(trucksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -63,6 +82,52 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Chart Data Preparation
+  const getOrdersPerDayData = () => {
+    const dailyCounts: Record<string, number> = {};
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return d.toISOString().split('T')[0];
+    }).reverse();
+
+    last7Days.forEach(date => dailyCounts[date] = 0);
+
+    orders.forEach(order => {
+      const date = order.created_at?.toDate ? 
+        order.created_at.toDate().toISOString().split('T')[0] : 
+        (order.created_at ? new Date(order.created_at).toISOString().split('T')[0] : null);
+      
+      if (date && dailyCounts[date] !== undefined) {
+        dailyCounts[date]++;
+      }
+    });
+
+    return Object.entries(dailyCounts).map(([date, count]) => ({
+      date: date.split('-').slice(1).join('/'),
+      orders: count
+    }));
+  };
+
+  const getDeliveryPerformanceData = () => {
+    const statusCounts: Record<string, number> = {};
+    STEPS.forEach(step => statusCounts[step] = 0);
+
+    orders.forEach(order => {
+      if (statusCounts[order.status] !== undefined) {
+        statusCounts[order.status]++;
+      }
+    });
+
+    return Object.entries(statusCounts)
+      .filter(([_, count]) => count > 0)
+      .map(([name, value]) => ({
+        name,
+        value,
+        color: STATUS_COLORS[name] || "#cbd5e1"
+      }));
   };
 
   const handleLogout = async () => {
@@ -330,6 +395,92 @@ export default function AdminDashboard() {
               <StatCard label="Delivered" value={stats.delivered} icon={<CheckCircle2 />} color="bg-green-500" />
             </div>
 
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h3 className="text-xl font-black flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-primary" />
+                      Orders per Day
+                    </h3>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest mt-1">Last 7 days activity</p>
+                  </div>
+                </div>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={getOrdersPerDayData()}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                        dy={10}
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                      />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        labelStyle={{ fontWeight: 800, color: '#1e293b', marginBottom: '4px' }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="orders" 
+                        stroke="#6366f1" 
+                        strokeWidth={4} 
+                        dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }}
+                        activeDot={{ r: 6, strokeWidth: 0 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h3 className="text-xl font-black flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-primary" />
+                      Delivery Performance
+                    </h3>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest mt-1">Status distribution</p>
+                  </div>
+                </div>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={getDeliveryPerformanceData()}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {getDeliveryPerformanceData().map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        iconType="circle"
+                        formatter={(value) => <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
             {/* Recent Orders Preview */}
             <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
               <div className="p-8 border-b border-slate-100 flex items-center justify-between">
@@ -345,6 +496,7 @@ export default function AdminDashboard() {
                       <th className="px-8 py-4">Status</th>
                       <th className="px-8 py-4">Location</th>
                       <th className="px-8 py-4">Last Updated</th>
+                      <th className="px-8 py-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -353,13 +505,21 @@ export default function AdminDashboard() {
                         <td className="px-8 py-5 font-black text-slate-900">{order.tracking_code}</td>
                         <td className="px-8 py-5 text-slate-600 font-medium">{order.customer_name}</td>
                         <td className="px-8 py-5">
-                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter bg-blue-50 text-blue-600 border border-blue-100">
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[order.status]}20`, color: STATUS_COLORS[order.status] }}>
                             {order.status}
                           </span>
                         </td>
                         <td className="px-8 py-5 text-slate-500 font-bold text-sm">{order.location}</td>
                         <td className="px-8 py-5 text-slate-400 text-xs font-bold">
                           {order.updated_at ? new Date(order.updated_at).toLocaleString() : "N/A"}
+                        </td>
+                        <td className="px-8 py-5">
+                          <button 
+                            onClick={() => setSelectedOrder(order)}
+                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-primary"
+                          >
+                            <Eye className="h-5 w-5" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -433,8 +593,11 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-8 py-5 text-slate-500 font-bold text-sm">{order.location}</td>
                         <td className="px-8 py-5">
-                          <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-primary">
-                            <MoreHorizontal className="h-5 w-5" />
+                          <button 
+                            onClick={() => setSelectedOrder(order)}
+                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-primary"
+                          >
+                            <Eye className="h-5 w-5" />
                           </button>
                         </td>
                       </tr>
@@ -445,6 +608,94 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        <AnimatePresence>
+          {selectedOrder && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/20 backdrop-blur-sm p-6">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="w-full max-w-2xl rounded-3xl bg-white p-10 shadow-2xl overflow-hidden relative"
+              >
+                <button 
+                  onClick={() => setSelectedOrder(null)}
+                  className="absolute right-6 top-6 rounded-full bg-slate-100 p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                >
+                  <MoreHorizontal className="h-5 w-5 rotate-90" />
+                </button>
+
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                    <Package className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900">{selectedOrder.tracking_code}</h3>
+                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Order Details</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-8 mb-10">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Name</p>
+                    <p className="font-bold text-slate-900">{selectedOrder.customer_name || "N/A"}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Status</p>
+                    <div className="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[selectedOrder.status]}20`, color: STATUS_COLORS[selectedOrder.status] }}>
+                      {selectedOrder.status}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Location</p>
+                    <p className="font-bold text-slate-900 flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      {selectedOrder.location}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Truck Assigned</p>
+                    <p className="font-bold text-slate-900 flex items-center gap-2">
+                      <Truck className="h-4 w-4 text-primary" />
+                      {selectedOrder.truck_code || "Unassigned"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Weight / Volume</p>
+                    <p className="font-bold text-slate-900">{selectedOrder.weight || 0}kg / {selectedOrder.volume || 0}m³</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Cost</p>
+                    <p className="font-bold text-primary">
+                      {selectedOrder.total_cost ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedOrder.total_cost) : "N/A"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Raw Data / Metadata</h4>
+                  <div className="max-h-40 overflow-y-auto text-[10px] font-mono text-slate-500 space-y-1">
+                    {Object.entries(selectedOrder.details || {}).map(([key, value]) => (
+                      <div key={key} className="flex justify-between border-b border-slate-200 py-1">
+                        <span className="font-bold">{key}:</span>
+                        <span>{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-8 flex justify-end">
+                  <button 
+                    onClick={() => setSelectedOrder(null)}
+                    className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {activeTab === "trucks" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

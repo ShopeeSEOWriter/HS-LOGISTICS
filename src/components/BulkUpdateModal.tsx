@@ -4,6 +4,7 @@ import { cn } from "../lib/utils";
 import * as XLSX from "xlsx";
 import { doc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { notificationService } from "../services/notificationService";
 
 interface BulkUpdateModalProps {
   status: string;
@@ -72,6 +73,7 @@ export default function BulkUpdateModal({ status, location, onClose, onSuccess }
 
           const batch = writeBatch(db);
           let count = 0;
+          const trackingCodes: string[] = [];
 
           jsonData.forEach((row: any) => {
             const trackingCode = String(row["Mã vận đơn"] || row["Tracking Code"] || row["Mã đơn"] || "").trim();
@@ -82,11 +84,18 @@ export default function BulkUpdateModal({ status, location, onClose, onSuccess }
                 location: location,
                 last_updated: serverTimestamp(),
               });
+              trackingCodes.push(trackingCode);
               count++;
             }
           });
 
           await batch.commit();
+          
+          // Notify users
+          if (trackingCodes.length > 0) {
+            await notificationService.notifyBulkStatusUpdate(trackingCodes, status, location);
+          }
+          
           onSuccess(count);
         } catch (err: any) {
           console.error("Bulk update processing error:", err);

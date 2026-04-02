@@ -9,14 +9,20 @@ import { useAuth } from "../hooks/useAuth";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 
 const STATUS_OPTIONS = [
-  { label: "Đã bốc hàng", subLabel: "已装车", location: "Đông Hưng", color: "bg-blue-500" },
+  { label: "Đã nhận tại kho Trung Quốc", subLabel: "已入中国仓", location: "Kho Trung Quốc", color: "bg-blue-400" },
+  { label: "Đã bốc hàng lên xe", subLabel: "已装车", location: "Kho Trung Quốc", color: "bg-blue-500" },
+  { label: "Đã xuất kho Trung Quốc", subLabel: "已从中国发货", location: "Kho Trung Quốc", color: "bg-blue-600" },
+  { label: "Đang vận chuyển ra biên giới", subLabel: "前往边境中", location: "Trung Quốc", color: "bg-amber-400" },
   { label: "Đang làm thủ tục hải quan", subLabel: "海关清关中", location: "Biên giới", color: "bg-amber-500" },
-  { label: "Xe đã qua Việt Nam", subLabel: "车辆已入越南", location: "Móng Cái", color: "bg-emerald-500" },
-  { label: "Xe đang về kho Hà Nội", subLabel: "车辆前往河内仓", location: "Trên đường", color: "bg-indigo-500" },
-  { label: "Đã về kho Hà Nội", subLabel: "已到河内仓库", location: "Hà Nội", color: "bg-indigo-600" },
+  { label: "Đã thông quan", subLabel: "已完成清关", location: "Biên giới", color: "bg-emerald-400" },
+  { label: "Đã về đến Việt Nam", subLabel: "已入越南境", location: "Việt Nam", color: "bg-emerald-500" },
+  { label: "Đã về kho Hà Nội", subLabel: "已到河内仓", location: "Hà Nội", color: "bg-indigo-500" },
+  { label: "Đang phân loại tại kho", subLabel: "仓库分拣中", location: "Hà Nội", color: "bg-indigo-600" },
   { label: "Đang giao hàng", subLabel: "派送中", location: "Nội địa VN", color: "bg-purple-500" },
   { label: "Đã giao hàng", subLabel: "已送达", location: "Người nhận", color: "bg-green-500" },
 ];
+
+import { getShippingSettings, calculateShippingFee } from "../services/settingsService";
 
 export default function AdminTruckDetail() {
   const { id } = useParams();
@@ -27,6 +33,7 @@ export default function AdminTruckDetail() {
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<any>(null);
   
   // Edit Order State
   const [editingOrder, setEditingOrder] = useState<any>(null);
@@ -36,6 +43,14 @@ export default function AdminTruckDetail() {
     volume: "",
     item_type: ""
   });
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const s = await getShippingSettings();
+      setSettings(s);
+    };
+    fetchSettings();
+  }, []);
 
   useEffect(() => {
     if (!id || authLoading || !user) return;
@@ -51,18 +66,20 @@ export default function AdminTruckDetail() {
       setLoading(false);
     });
 
-    const ordersQuery = query(collection(db, "orders"), where("truck_code", "==", id));
-    const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
-      const orderList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setOrders(orderList);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, "orders");
-    });
+    if (id) {
+      const ordersQuery = query(collection(db, "orders"), where("truck_code", "==", id));
+      const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+        const orderList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setOrders(orderList);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, "orders");
+      });
 
-    return () => {
-      unsubscribeTruck();
-      unsubscribeOrders();
-    };
+      return () => {
+        unsubscribeTruck();
+        unsubscribeOrders();
+      };
+    }
   }, [id, user, authLoading]);
 
   const handleUpdateStatus = async (status: string, location: string) => {
@@ -82,16 +99,32 @@ export default function AdminTruckDetail() {
         last_updated: serverTimestamp(),
       });
 
-      // 2. Update all orders in this truck
-      const ordersQuery = query(collection(db, "orders"), where("truck_id", "==", id));
-      const ordersSnapshot = await getDocs(ordersQuery);
-      ordersSnapshot.docs.forEach((orderDoc) => {
-        batch.update(orderDoc.ref, {
-          status,
-          location,
-          last_updated: serverTimestamp(),
+      // 2. Update all orders in this truck and add tracking logs
+      if (id) {
+        const ordersQuery = query(collection(db, "orders"), where("truck_code", "==", id));
+        const ordersSnapshot = await getDocs(ordersQuery);
+        
+        ordersSnapshot.docs.forEach((orderDoc) => {
+          const orderData = orderDoc.data();
+          // Update order
+          batch.update(orderDoc.ref, {
+            status,
+            location,
+            last_updated: serverTimestamp(),
+          });
+
+          // Add tracking log for the order
+          const logId = `log_${orderData.tracking_code}_${status.replace(/\s+/g, '_')}_${Date.now()}`;
+          const logRef = doc(db, "tracking_logs", logId);
+          batch.set(logRef, {
+            tracking_code: orderData.tracking_code,
+            status,
+            timestamp: new Date().toISOString(),
+            location,
+            note: `Cập nhật trạng thái từ xe ${truck.truck_code}: ${status}`
+          });
         });
-      });
+      }
 
       await batch.commit();
     } catch (err: any) {
@@ -113,12 +146,23 @@ export default function AdminTruckDetail() {
   };
 
   const handleSaveOrder = async () => {
-    if (!editingOrder || isUpdating) return;
+    if (!editingOrder || isUpdating || !settings) return;
     setIsUpdating(true);
     try {
+      const weight = parseFloat(editForm.weight) || 0;
+      const volume = parseFloat(editForm.volume) || 0;
+      
+      const { totalCost, pricePerKg, pricePerM3 } = calculateShippingFee(weight, volume, settings, editForm.destination);
+
       const orderRef = doc(db, "orders", editingOrder.id);
       await updateDoc(orderRef, {
-        ...editForm,
+        destination: editForm.destination,
+        weight,
+        volume,
+        item_type: editForm.item_type,
+        price_per_kg: pricePerKg,
+        price_per_m3: pricePerM3,
+        total_cost: totalCost,
         last_updated: serverTimestamp(),
       });
       setEditingOrder(null);
@@ -137,11 +181,13 @@ export default function AdminTruckDetail() {
       const batch = writeBatch(db);
       batch.delete(doc(db, "trucks", id!));
 
-      const ordersQuery = query(collection(db, "orders"), where("truck_id", "==", id));
-      const ordersSnapshot = await getDocs(ordersQuery);
-      ordersSnapshot.docs.forEach((orderDoc) => {
-        batch.update(orderDoc.ref, { truck_id: null });
-      });
+      if (id) {
+        const ordersQuery = query(collection(db, "orders"), where("truck_code", "==", id));
+        const ordersSnapshot = await getDocs(ordersQuery);
+        ordersSnapshot.docs.forEach((orderDoc) => {
+          batch.update(orderDoc.ref, { truck_code: null });
+        });
+      }
 
       await batch.commit();
       navigate("/admin/trucks");
@@ -172,13 +218,25 @@ export default function AdminTruckDetail() {
     <div className="flex min-h-screen bg-surface">
       <main className="flex-1 p-12 pt-24">
         <div className="mb-8 flex items-center justify-between">
-          <button 
-            onClick={() => navigate("/admin/trucks")}
-            className="flex items-center gap-2 text-sm font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span>Quay lại danh sách xe</span>
-          </button>
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => navigate("/admin/trucks")}
+              className="flex items-center gap-2 text-sm font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Quay lại danh sách xe</span>
+            </button>
+            
+            <div className="h-4 w-[1px] bg-surface-container" />
+            
+            <button 
+              onClick={() => navigate("/")}
+              className="flex items-center gap-2 text-sm font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Trang chủ theo dõi</span>
+            </button>
+          </div>
 
           <button 
             onClick={handleDeleteTruck}
@@ -229,6 +287,7 @@ export default function AdminTruckDetail() {
                     <tr>
                       <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Mã vận đơn</th>
                       <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Thông tin</th>
+                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Cước phí</th>
                       <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Trạng thái</th>
                       <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-right">Thao tác</th>
                     </tr>
@@ -243,6 +302,19 @@ export default function AdminTruckDetail() {
                         <td className="px-8 py-6">
                           <div className="text-xs font-bold">{order.destination}</div>
                           <div className="text-[10px] text-on-surface-variant/60">{order.weight}kg | {order.volume}m³</div>
+                        </td>
+                        <td className="px-8 py-6">
+                          {order.total_cost ? (
+                            <>
+                              <div className="text-xs font-bold text-on-surface">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_cost)}</div>
+                              <div className="text-[10px] text-on-surface-variant/60">
+                                {new Intl.NumberFormat('vi-VN').format(order.price_per_kg)}/kg
+                                {order.price_per_m3 && ` | ${new Intl.NumberFormat('vi-VN').format(order.price_per_m3)}/m³`}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-[10px] italic text-on-surface-variant/40">Chưa tính phí</div>
+                          )}
                         </td>
                         <td className="px-8 py-6">
                           <div className="inline-flex rounded-full bg-primary/10 px-4 py-1 text-[10px] font-bold text-primary">

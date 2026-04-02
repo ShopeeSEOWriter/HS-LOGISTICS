@@ -1,5 +1,6 @@
 import { LayoutDashboard, Truck, Boxes, Scale, Headset, PlusCircle, Search, Bell, HelpCircle, Upload, Edit, ChevronRight, CheckCircle, AlertTriangle } from "lucide-react";
 import { cn } from "@/src/lib/utils";
+import { Link } from "react-router-dom";
 
 export default function Dashboard() {
   return (
@@ -23,6 +24,16 @@ export default function Dashboard() {
           <SidebarLink icon={<Boxes className="h-5 w-5" />} label="Kho hàng" subLabel="库存" />
           <SidebarLink icon={<Scale className="h-5 w-5" />} label="Hải quan" subLabel="海关" />
           <SidebarLink icon={<Headset className="h-5 w-5" />} label="Hỗ trợ" subLabel="支持" />
+          
+          <div className="my-4 h-[1px] w-full bg-surface-container mx-4 opacity-50" />
+          
+          <Link to="/" className="ml-2 flex items-center gap-4 rounded-l-2xl px-6 py-4 text-on-surface-variant hover:bg-surface-container transition-all">
+            <div className="text-primary"><ChevronRight className="h-5 w-5 rotate-180" /></div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold leading-none">Trang chủ</span>
+              <span className="mt-1 text-[9px] font-bold uppercase tracking-tighter opacity-60">返回首页</span>
+            </div>
+          </Link>
         </nav>
 
         <div className="mt-auto px-4">

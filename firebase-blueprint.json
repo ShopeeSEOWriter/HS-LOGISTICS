@@ -21,12 +21,25 @@
         "truck_code": { "type": "string", "description": "The truck this order is currently assigned to." },
         "status": { "type": "string", "description": "Current status of the order." },
         "destination": { "type": "string", "description": "Destination (HN for Hanoi, SG for Saigon)." },
-        "weight": { "type": "string", "description": "Weight of the shipment." },
-        "volume": { "type": "string", "description": "Volume (M3) of the shipment." },
+        "weight": { "type": "number", "description": "Weight of the shipment in kg." },
+        "volume": { "type": "number", "description": "Volume (M3) of the shipment." },
         "item_type": { "type": "string", "description": "Type of goods." },
+        "price_per_kg": { "type": "number", "description": "Price per kg at the time of calculation." },
+        "total_cost": { "type": "number", "description": "Total shipping cost." },
         "last_updated": { "type": "string", "format": "date-time", "description": "Timestamp of the last status update." }
       },
       "required": ["tracking_code", "status", "last_updated"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application settings.",
+      "type": "object",
+      "properties": {
+        "price_per_kg": { "type": "number", "description": "Default price per kg." },
+        "min_weight": { "type": "number", "description": "Minimum weight for calculation." },
+        "volume_factor": { "type": "number", "description": "Factor to convert volume to weight (e.g., 167 for air, 300 for road)." }
+      },
+      "required": ["price_per_kg", "min_weight"]
     },
     "TrackingLog": {
       "title": "Tracking Log",
@@ -84,6 +97,10 @@
     "/user_tracking_history/{historyId}": {
       "schema": "UserTrackingHistory",
       "description": "Collection of user tracking history"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Global application settings"
     }
   }
 }

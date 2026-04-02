@@ -42,7 +42,7 @@ function AppContent() {
 
   return (
     <div className={cn("flex min-h-screen flex-col", isOps ? "bg-surface" : "bg-surface")}>
-      {!isOps && <Navbar />}
+      <Navbar />
       <div className="flex-grow">
         <Routes>
           <Route path="/" element={<Home />} />
