@@ -1,3 +1,4 @@
+console.log("Loading server.ts...");
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -33,6 +34,16 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser());
 
+  // Request Logger
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
+
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", env: process.env.NODE_ENV || "development" });
+  });
+
   // Auth Middleware
   const authenticateToken = async (req: any, res: any, next: any) => {
     const token = req.cookies.token || req.headers.authorization?.split(" ")[1];
@@ -59,7 +70,7 @@ async function startServer() {
       if (userSnap.exists()) return res.status(400).json({ error: "User already exists" });
 
       const hashedPassword = await bcrypt.hash(password, 10);
-      const role = email === "muadongnovact2@gmail.com" ? "admin" : "user";
+      const role = (email === "chichine153@gmail.com" || email === "zadavn1@gmail.com") ? "admin" : "user";
       const userData = {
         email,
         password_hash: hashedPassword,
@@ -92,7 +103,7 @@ async function startServer() {
 
       // Auto-assign admin role to specific email
       let role = userData.role || "user";
-      if (email === "muadongnovact2@gmail.com" && role !== "admin") {
+      if ((email === "chichine153@gmail.com" || email === "zadavn1@gmail.com") && role !== "admin") {
         role = "admin";
         await updateDoc(userRef, { role: "admin" });
       }
@@ -115,7 +126,7 @@ async function startServer() {
       
       // Ensure role is up to date for the admin email
       let role = userData.role || "user";
-      if (userData.email === "muadongnovact2@gmail.com" && role !== "admin") {
+      if ((userData.email === "chichine153@gmail.com" || userData.email === "zadavn1@gmail.com") && role !== "admin") {
         role = "admin";
         await updateDoc(userRef, { role: "admin" });
       }
@@ -614,8 +625,10 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("Failed to start server:", err);
+});

@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from "react";
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X } from "lucide-react";
 import { cn } from "../lib/utils";
+import * as XLSX from "xlsx";
+import { doc, writeBatch, serverTimestamp } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 interface BulkUpdateModalProps {
   status: string;
@@ -51,27 +54,50 @@ export default function BulkUpdateModal({ status, location, onClose, onSuccess }
     setIsUploading(true);
     setError(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("status", status);
-    formData.append("location", location);
-
     try {
-      const response = await fetch("/api/admin/bulk-update-status", {
-        method: "POST",
-        body: formData,
-      });
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      const result = await response.json();
+          if (jsonData.length === 0) {
+            setError("Tệp Excel không có dữ liệu.");
+            setIsUploading(false);
+            return;
+          }
 
-      if (response.ok) {
-        onSuccess(result.count);
-      } else {
-        setError(result.error || "Có lỗi xảy ra khi tải lên tệp.");
-      }
+          const batch = writeBatch(db);
+          let count = 0;
+
+          jsonData.forEach((row: any) => {
+            const trackingCode = String(row["Mã vận đơn"] || row["Tracking Code"] || row["Mã đơn"] || "").trim();
+            if (trackingCode) {
+              const orderRef = doc(db, "orders", trackingCode);
+              batch.update(orderRef, {
+                status: status,
+                location: location,
+                last_updated: serverTimestamp(),
+              });
+              count++;
+            }
+          });
+
+          await batch.commit();
+          onSuccess(count);
+        } catch (err: any) {
+          console.error("Bulk update processing error:", err);
+          setError("Lỗi khi xử lý tệp Excel.");
+        } finally {
+          setIsUploading(false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
     } catch (err: any) {
-      setError("Lỗi kết nối máy chủ.");
-    } finally {
+      setError("Lỗi khi đọc tệp.");
       setIsUploading(false);
     }
   };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, where, writeBatch, getDoc, setDoc } from "firebase/firestore";
-import { db, auth } from "../firebase";
+import { db, auth } from "../lib/firebase";
+import * as XLSX from "xlsx";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -76,90 +77,80 @@ export default function AdminDashboard() {
     setUploading(true);
     setMessage(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const response = await fetch("/api/admin/parse-excel", {
-        method: "POST",
-        body: formData,
-      });
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      if (!response.ok) throw new Error("Failed to parse Excel");
+          if (jsonData.length === 0) {
+            setMessage({ type: "error", text: "Tệp Excel không có dữ liệu." });
+            setUploading(false);
+            return;
+          }
 
-      const { data } = await response.json();
-      
-      if (data.length === 0) {
-        setMessage({ type: "error", text: "No valid tracking codes found in Excel." });
-        return;
-      }
+          const batch = writeBatch(db);
+          const now = new Date().toISOString();
 
-      // Perform bulk updates
-      const batch = writeBatch(db);
-      const now = new Date().toISOString();
+          for (const row of jsonData) {
+            const anyRow = row as any;
+            const trackingCode = String(anyRow["Mã vận đơn"] || anyRow["Tracking Code"] || anyRow["Mã đơn"] || "").trim();
+            const truckCode = String(anyRow["Mã xe"] || anyRow["Truck Code"] || "").trim();
+            const status = String(anyRow["Trạng thái"] || anyRow["Status"] || "Packed into truck/container").trim();
+            
+            if (!trackingCode) continue;
 
-      for (const item of data) {
-        const { tracking_code, truck_code, status } = item;
-        
-        // Find or create order
-        const q = query(collection(db, "orders"), where("tracking_code", "==", tracking_code));
-        const orderSnap = await getDocs(q);
-        
-        let orderId = "";
-        const orderStatus = status || "Packed into truck/container";
-        const orderLocation = "China Warehouse";
+            const orderRef = doc(db, "orders", trackingCode);
+            batch.set(orderRef, {
+              tracking_code: trackingCode,
+              customer_name: anyRow["Tên khách hàng"] || anyRow["Customer Name"] || "Imported via Excel",
+              status: status,
+              location: anyRow["Vị trí"] || anyRow["Location"] || "China Warehouse",
+              truck_code: truckCode || null,
+              updated_at: now,
+              created_at: serverTimestamp(), // Use serverTimestamp for new docs
+            }, { merge: true });
 
-        if (orderSnap.empty) {
-          // Create new order
-          const newOrderRef = doc(collection(db, "orders"));
-          orderId = newOrderRef.id;
-          batch.set(newOrderRef, {
-            tracking_code,
-            customer_name: "Imported via Excel",
-            status: orderStatus,
-            location: orderLocation,
-            truck_code,
-            created_at: now,
-            updated_at: now
-          });
-        } else {
-          // Update existing order
-          const orderDoc = orderSnap.docs[0];
-          orderId = orderDoc.id;
-          batch.update(orderDoc.ref, {
-            status: orderStatus,
-            truck_code,
-            updated_at: now
-          });
+            // Add log
+            const logRef = doc(collection(db, `orders/${trackingCode}/logs`));
+            batch.set(logRef, {
+              order_id: trackingCode,
+              status: status,
+              timestamp: now,
+              location: anyRow["Vị trí"] || anyRow["Location"] || "China Warehouse",
+              note: truckCode ? `Loaded into truck ${truckCode}` : "Imported via Excel"
+            });
+
+            if (truckCode) {
+              const truckRef = doc(db, "trucks", truckCode);
+              batch.set(truckRef, {
+                truck_code: truckCode,
+                status: "Loading",
+                updated_at: now
+              }, { merge: true });
+            }
+          }
+
+          await batch.commit();
+          setMessage({ type: "success", text: `Successfully updated ${jsonData.length} orders.` });
+          fetchData();
+        } catch (err: any) {
+          console.error("Excel processing error:", err);
+          setMessage({ type: "error", text: "Lỗi khi xử lý tệp Excel." });
+        } finally {
+          setUploading(false);
         }
-
-        // Add log
-        const logRef = doc(collection(db, `orders/${orderId}/logs`));
-        batch.set(logRef, {
-          order_id: orderId,
-          status: orderStatus,
-          timestamp: now,
-          location: orderLocation,
-          note: `Loaded into truck ${truck_code}`
-        });
-
-        // Ensure truck exists
-        const truckRef = doc(db, "trucks", truck_code);
-        batch.set(truckRef, {
-          truck_code,
-          status: "Loading",
-          updated_at: now
-        }, { merge: true });
-      }
-
-      await batch.commit();
-      setMessage({ type: "success", text: `Successfully updated ${data.length} orders.` });
-      fetchData();
+      };
+      reader.readAsArrayBuffer(file);
     } catch (err) {
       console.error("Upload error:", err);
       setMessage({ type: "error", text: "An error occurred during Excel import." });
-    } finally {
       setUploading(false);
+    } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };

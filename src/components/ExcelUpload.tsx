@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from "react";
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
+import * as XLSX from "xlsx";
+import { doc, setDoc, writeBatch, collection, serverTimestamp } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 interface ExcelUploadProps {
   onSuccess?: (results: any[]) => void;
@@ -55,29 +58,67 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
     setError(null);
     setSuccess(false);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("truckCode", truckCode.trim());
-
     try {
-      const response = await fetch("/api/admin/upload-excel", {
-        method: "POST",
-        body: formData,
-      });
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      const result = await response.json();
+          if (jsonData.length === 0) {
+            setError("Tệp Excel không có dữ liệu.");
+            setIsUploading(false);
+            return;
+          }
 
-      if (response.ok) {
-        setSuccess(true);
-        setFile(null);
-        setTruckCode("");
-        if (onSuccess) onSuccess(result.results);
-      } else {
-        setError(result.error || "Có lỗi xảy ra khi tải lên tệp.");
-      }
+          const batch = writeBatch(db);
+          const truckId = truckCode.trim();
+          const truckRef = doc(db, "trucks", truckId);
+
+          // Create or update truck
+          batch.set(truckRef, {
+            truck_code: truckId,
+            status: "Đã bốc hàng",
+            location: "Đông Hưng",
+            order_count: jsonData.length,
+            last_updated: serverTimestamp(),
+          }, { merge: true });
+
+          // Create orders
+          jsonData.forEach((row: any) => {
+            const trackingCode = String(row["Mã vận đơn"] || row["Tracking Code"] || row["Mã đơn"] || "").trim();
+            if (trackingCode) {
+              const orderRef = doc(db, "orders", trackingCode);
+              batch.set(orderRef, {
+                tracking_code: trackingCode,
+                truck_id: truckId,
+                status: "Đã bốc hàng",
+                location: "Đông Hưng",
+                last_updated: serverTimestamp(),
+                details: row,
+              }, { merge: true });
+            }
+          });
+
+          await batch.commit();
+          
+          setSuccess(true);
+          setFile(null);
+          setTruckCode("");
+          if (onSuccess) onSuccess(jsonData);
+        } catch (err: any) {
+          console.error("Excel processing error:", err);
+          setError("Lỗi khi xử lý tệp Excel.");
+        } finally {
+          setIsUploading(false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
     } catch (err: any) {
-      setError("Lỗi kết nối máy chủ.");
-    } finally {
+      setError("Lỗi khi đọc tệp.");
       setIsUploading(false);
     }
   };

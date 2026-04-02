@@ -4,6 +4,8 @@ import { useAuth } from "../hooks/useAuth";
 import { Package, Clock, Trash2, ChevronRight, Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "../lib/utils";
 import { format } from "date-fns";
+import { collection, query, where, orderBy, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 export default function UserHistory() {
   const { user, loading: authLoading } = useAuth();
@@ -14,17 +16,26 @@ export default function UserHistory() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchHistory = async () => {
+    if (!user) return;
     setLoading(true);
     try {
-      const response = await fetch("/api/history");
-      if (response.ok) {
-        const data = await response.json();
-        setHistory(data);
-      } else {
-        setError("Không thể tải lịch sử.");
-      }
+      const q = query(
+        collection(db, "history"),
+        where("user_email", "==", user.email),
+        orderBy("created_at", "desc")
+      );
+      const querySnapshot = await getDocs(q);
+      const historyData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Map Firestore fields to expected component fields if necessary
+        last_checked_at: doc.data().created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+        status: "Đã tra cứu"
+      }));
+      setHistory(historyData);
     } catch (err) {
-      setError("Lỗi kết nối máy chủ.");
+      console.error("History fetch error:", err);
+      setError("Không thể tải lịch sử.");
     } finally {
       setLoading(false);
     }
@@ -40,10 +51,8 @@ export default function UserHistory() {
 
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`/api/history/${id}`, { method: "DELETE" });
-      if (response.ok) {
-        setHistory(history.filter((item) => item.id !== id));
-      }
+      await deleteDoc(doc(db, "history", id));
+      setHistory(history.filter((item) => item.id !== id));
     } catch (err) {
       console.error("Delete error:", err);
     }

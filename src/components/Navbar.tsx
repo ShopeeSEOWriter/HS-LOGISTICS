@@ -130,7 +130,7 @@ export default function Navbar() {
             ) : (
               <Link 
                 to="/auth" 
-                className="rounded-full bg-on-background px-6 py-2 text-xs font-bold text-white shadow-lg transition-all hover:opacity-90 active:scale-95"
+                className="rounded-full bg-orange-500 px-6 py-2 text-xs font-bold text-black shadow-lg transition-all hover:bg-orange-600 active:scale-95"
               >
                 Đăng nhập
               </Link>

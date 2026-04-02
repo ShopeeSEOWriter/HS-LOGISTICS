@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, onSnapshot, collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "../firebase";
+import { doc, onSnapshot, collection, query, where, getDocs, updateDoc, deleteDoc, writeBatch, serverTimestamp } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import { Truck, Package, ChevronLeft, CheckCircle, Clock, AlertCircle, Loader2, MapPin, FileText, Trash2, Edit2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { format } from "date-fns";
@@ -72,22 +72,30 @@ export default function AdminTruckDetail() {
     setError(null);
 
     try {
-      const response = await fetch("/api/admin/update-truck-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          truckCode: id,
-          status,
-          location,
-          note: `Cập nhật trạng thái xe ${id}: ${status}`
-        }),
+      const batch = writeBatch(db);
+      const truckRef = doc(db, "trucks", id);
+      
+      // 1. Update truck status
+      batch.update(truckRef, {
+        status,
+        location,
+        last_updated: serverTimestamp(),
       });
 
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || "Có lỗi xảy ra khi cập nhật.");
-      }
+      // 2. Update all orders in this truck
+      const ordersQuery = query(collection(db, "orders"), where("truck_id", "==", id));
+      const ordersSnapshot = await getDocs(ordersQuery);
+      ordersSnapshot.docs.forEach((orderDoc) => {
+        batch.update(orderDoc.ref, {
+          status,
+          location,
+          last_updated: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
     } catch (err: any) {
+      console.error("Update status error:", err);
       setError(err.message);
     } finally {
       setIsUpdating(false);
@@ -108,14 +116,14 @@ export default function AdminTruckDetail() {
     if (!editingOrder || isUpdating) return;
     setIsUpdating(true);
     try {
-      const response = await fetch(`/api/admin/orders/${editingOrder.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
+      const orderRef = doc(db, "orders", editingOrder.id);
+      await updateDoc(orderRef, {
+        ...editForm,
+        last_updated: serverTimestamp(),
       });
-      if (!response.ok) throw new Error("Failed to update order");
       setEditingOrder(null);
     } catch (err: any) {
+      console.error("Save order error:", err);
       setError(err.message);
     } finally {
       setIsUpdating(false);
@@ -126,14 +134,17 @@ export default function AdminTruckDetail() {
     if (!window.confirm(`Bạn có chắc chắn muốn xóa xe ${id}? Tất cả đơn hàng sẽ bị gỡ khỏi xe này.`)) return;
 
     try {
-      const response = await fetch(`/api/admin/trucks/${id}`, {
-        method: "DELETE",
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "trucks", id!));
+
+      const ordersQuery = query(collection(db, "orders"), where("truck_id", "==", id));
+      const ordersSnapshot = await getDocs(ordersQuery);
+      ordersSnapshot.docs.forEach((orderDoc) => {
+        batch.update(orderDoc.ref, { truck_id: null });
       });
-      if (response.ok) {
-        navigate("/admin/trucks");
-      } else {
-        throw new Error("Lỗi khi xóa xe");
-      }
+
+      await batch.commit();
+      navigate("/admin/trucks");
     } catch (error) {
       console.error(error);
       alert("Không thể xóa xe. Vui lòng thử lại.");
@@ -144,10 +155,7 @@ export default function AdminTruckDetail() {
     if (!window.confirm(`Bạn có chắc chắn muốn xóa đơn hàng ${orderId}?`)) return;
 
     try {
-      const response = await fetch(`/api/admin/orders/${orderId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Lỗi khi xóa đơn hàng");
+      await deleteDoc(doc(db, "orders", orderId));
     } catch (error) {
       console.error(error);
       alert("Không thể xóa đơn hàng. Vui lòng thử lại.");

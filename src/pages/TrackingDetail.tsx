@@ -3,7 +3,7 @@ import { Package, Truck, MapPin, CheckCircle2, Clock, Info, Headset, Route, Aler
 import { motion } from "motion/react";
 import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, collection, query, where, orderBy } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../lib/firebase";
 import { cn } from "@/src/lib/utils";
 import { format } from "date-fns";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";

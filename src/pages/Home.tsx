@@ -4,6 +4,8 @@ import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
 import { useAuth } from "../hooks/useAuth";
+import { collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 export default function Home() {
   const [trackingCode, setTrackingCode] = useState("");
@@ -13,14 +15,25 @@ export default function Home() {
 
   useEffect(() => {
     if (user) {
-      fetch("/api/history")
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            setRecentHistory(data.slice(0, 3));
-          }
-        })
-        .catch(err => console.error("History fetch error:", err));
+      const fetchHistory = async () => {
+        try {
+          const q = query(
+            collection(db, "history"),
+            where("user_email", "==", user.email),
+            orderBy("created_at", "desc"),
+            limit(3)
+          );
+          const querySnapshot = await getDocs(q);
+          const history = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setRecentHistory(history);
+        } catch (err) {
+          console.error("History fetch error:", err);
+        }
+      };
+      fetchHistory();
     }
   }, [user]);
 
@@ -29,14 +42,16 @@ export default function Home() {
     if (!trackingCode.trim()) return;
 
     // Save to history if logged in
-    try {
-      await fetch("/api/track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trackingCode: trackingCode.trim() }),
-      });
-    } catch (err) {
-      console.error("Track history save error:", err);
+    if (user) {
+      try {
+        await addDoc(collection(db, "history"), {
+          user_email: user.email,
+          tracking_code: trackingCode.trim(),
+          created_at: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error("Track history save error:", err);
+      }
     }
 
     navigate(`/tracking/${trackingCode.trim()}`);

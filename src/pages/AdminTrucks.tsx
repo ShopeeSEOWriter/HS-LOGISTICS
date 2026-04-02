@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc, writeBatch, getDocs, where } from "firebase/firestore";
+import { db } from "../lib/firebase";
 import { Truck, Package, ChevronRight, Clock, Plus, LayoutDashboard, Boxes, Scale, Headset, Trash2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import ExcelUpload from "../components/ExcelUpload";
@@ -68,10 +68,19 @@ export default function AdminTrucks() {
     if (!window.confirm(`Bạn có chắc chắn muốn xóa xe ${truckId}? Tất cả đơn hàng sẽ bị gỡ khỏi xe này.`)) return;
 
     try {
-      const response = await fetch(`/api/admin/trucks/${truckId}`, {
-        method: "DELETE",
+      const batch = writeBatch(db);
+      
+      // 1. Delete the truck document
+      batch.delete(doc(db, "trucks", truckId));
+      
+      // 2. Update all orders associated with this truck to have no truck_id
+      const ordersQuery = query(collection(db, "orders"), where("truck_id", "==", truckId));
+      const ordersSnapshot = await getDocs(ordersQuery);
+      ordersSnapshot.docs.forEach((orderDoc) => {
+        batch.update(orderDoc.ref, { truck_id: null });
       });
-      if (!response.ok) throw new Error("Lỗi khi xóa xe");
+
+      await batch.commit();
     } catch (error) {
       console.error(error);
       alert("Không thể xóa xe. Vui lòng thử lại.");
