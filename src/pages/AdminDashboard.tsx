@@ -11,7 +11,7 @@ import {
   Eye, TrendingUp, BarChart3, PieChart as PieChartIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "../lib/utils";
+import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, PieChart, Pie, Legend 
@@ -96,12 +96,18 @@ export default function AdminDashboard() {
     last7Days.forEach(date => dailyCounts[date] = 0);
 
     orders.forEach(order => {
-      const date = order.created_at?.toDate ? 
-        order.created_at.toDate().toISOString().split('T')[0] : 
-        (order.created_at ? new Date(order.created_at).toISOString().split('T')[0] : null);
+      let d: Date | null = null;
+      if (order.created_at?.toDate) {
+        d = order.created_at.toDate();
+      } else if (order.created_at) {
+        d = new Date(order.created_at);
+      }
       
-      if (date && dailyCounts[date] !== undefined) {
-        dailyCounts[date]++;
+      if (d && !isNaN(d.getTime())) {
+        const date = d.toISOString().split('T')[0];
+        if (dailyCounts[date] !== undefined) {
+          dailyCounts[date]++;
+        }
       }
     });
 
@@ -161,24 +167,49 @@ export default function AdminDashboard() {
           const batch = writeBatch(db);
           const now = new Date().toISOString();
 
+          // Identify columns robustly
+          const firstRow = jsonData[0];
+          const headers = Object.keys(firstRow);
+          const findKey = (patterns: string[]) => 
+            headers.find(h => patterns.some(p => h.trim().toUpperCase().includes(p.toUpperCase())));
+
+          const trackingKey = findKey(["MA HANG", "Mã hàng", "Mã vận đơn", "Tracking", "MA_VANDON", "BILL"]) || headers[0];
+          const truckKey = findKey(["Mã xe", "Truck Code", "Container", "Xe"]);
+          const statusKey = findKey(["Trạng thái", "Status", "Tinh trang"]);
+          const destinationKey = findKey(["NOI DEN", "Nơi đến", "Destination", "Địa chỉ", "NOI_DEN"]);
+
           for (const row of jsonData) {
             const anyRow = row as any;
-            const trackingCode = String(anyRow["Mã vận đơn"] || anyRow["Tracking Code"] || anyRow["Mã đơn"] || "").trim();
-            const truckCode = String(anyRow["Mã xe"] || anyRow["Truck Code"] || "").trim();
-            const status = String(anyRow["Trạng thái"] || anyRow["Status"] || "Packed into truck/container").trim();
+            const rawValue = anyRow[trackingKey!];
+            if (rawValue === undefined || rawValue === null) continue;
+
+            const rawTrackingCode = String(rawValue).trim().toUpperCase();
+            // Preserve hyphens, only remove spaces
+            const trackingCode = rawTrackingCode.replace(/\s+/g, "");
+            
+            const truckCode = truckKey ? String(anyRow[truckKey] || "").trim() : "";
+            const status = statusKey ? String(anyRow[statusKey] || "Packed into truck/container").trim() : "Packed into truck/container";
+            const rawDestination = destinationKey ? String(anyRow[destinationKey] || "").trim() : "";
+            const destination = rawDestination ? mapDestination(rawDestination) : null;
             
             if (!trackingCode) continue;
 
             const orderRef = doc(db, "orders", trackingCode);
-            batch.set(orderRef, {
+            const updateData: any = {
               tracking_code: trackingCode,
               customer_name: anyRow["Tên khách hàng"] || anyRow["Customer Name"] || "Imported via Excel",
               status: status,
               location: anyRow["Vị trí"] || anyRow["Location"] || "China Warehouse",
               truck_code: truckCode || null,
               updated_at: now,
-              created_at: serverTimestamp(), // Use serverTimestamp for new docs
-            }, { merge: true });
+              created_at: serverTimestamp(),
+            };
+
+            if (destination && destination !== "Chưa xác định") {
+              updateData.destination = destination;
+            }
+
+            batch.set(orderRef, updateData, { merge: true });
 
             // Add log
             const logRef = doc(collection(db, `orders/${trackingCode}/logs`));
@@ -187,7 +218,7 @@ export default function AdminDashboard() {
               status: status,
               timestamp: now,
               location: anyRow["Vị trí"] || anyRow["Location"] || "China Warehouse",
-              note: truckCode ? `Loaded into truck ${truckCode}` : "Imported via Excel"
+              note: `${truckCode ? `Loaded into truck ${truckCode}` : "Imported via Excel"}${destination ? ` - Nơi đến: ${destination}` : ""}`
             });
 
             if (truckCode) {
@@ -195,6 +226,7 @@ export default function AdminDashboard() {
               batch.set(truckRef, {
                 truck_code: truckCode,
                 status: "Loading",
+                destination: destination || "Chưa xác định",
                 updated_at: now
               }, { merge: true });
             }
@@ -511,7 +543,7 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-8 py-5 text-slate-500 font-bold text-sm">{order.location}</td>
                         <td className="px-8 py-5 text-slate-400 text-xs font-bold">
-                          {order.updated_at ? new Date(order.updated_at).toLocaleString() : "N/A"}
+                          {safeFormatDate(order.updated_at)}
                         </td>
                         <td className="px-8 py-5">
                           <button 

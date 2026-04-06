@@ -61,6 +61,7 @@
       "properties": {
         "email": { "type": "string", "format": "email" },
         "password_hash": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User role (admin or user)" },
         "created_at": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "password_hash", "created_at"]

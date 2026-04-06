@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { doc, onSnapshot, collection, query, where, getDocs, updateDoc, deleteDoc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Truck, Package, ChevronLeft, CheckCircle, Clock, AlertCircle, Loader2, MapPin, FileText, Trash2, Edit2 } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import { format } from "date-fns";
 import { useAuth } from "../hooks/useAuth";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
@@ -23,6 +23,7 @@ const STATUS_OPTIONS = [
 ];
 
 import { getShippingSettings, calculateShippingFee } from "../services/settingsService";
+import MessageModal from "../components/MessageModal";
 
 export default function AdminTruckDetail() {
   const { id } = useParams();
@@ -32,11 +33,20 @@ export default function AdminTruckDetail() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<any>(null);
+  const [messageModal, setMessageModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info" as "success" | "error" | "info"
+  });
   
   // Edit Order State
   const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [isEditingTruck, setIsEditingTruck] = useState(false);
+  const [truckForm, setTruckForm] = useState({
+    destination: ""
+  });
   const [editForm, setEditForm] = useState({
     destination: "",
     weight: "",
@@ -83,14 +93,39 @@ export default function AdminTruckDetail() {
   }, [id, user, authLoading]);
 
   const handleUpdateStatus = async (status: string, location: string) => {
-    if (!id || isUpdating) return;
+    if (!id || isUpdating || !truck) return;
+
+    // Validation: Cannot update empty truck
+    if (orders.length === 0) {
+      setMessageModal({
+        isOpen: true,
+        title: "Lỗi",
+        message: "Không thể cập nhật trạng thái cho xe trống. Vui lòng thêm đơn hàng trước.",
+        type: "error"
+      });
+      return;
+    }
+
+    // Validation: Cannot skip status steps (Optional, but requested)
+    const currentIndex = STATUS_OPTIONS.findIndex(o => o.label === truck.status);
+    const nextIndex = STATUS_OPTIONS.findIndex(o => o.label === status);
+    
+    if (nextIndex < currentIndex) {
+      if (!window.confirm("Bạn đang cập nhật trạng thái lùi lại. Bạn có chắc chắn muốn thực hiện?")) {
+        return;
+      }
+    } else if (nextIndex > currentIndex + 1) {
+      if (!window.confirm(`Bạn đang bỏ qua các bước trung gian. Bạn có chắc chắn muốn cập nhật trực tiếp lên "${status}"?`)) {
+        return;
+      }
+    }
 
     setIsUpdating(true);
-    setError(null);
 
     try {
       const batch = writeBatch(db);
       const truckRef = doc(db, "trucks", id);
+      const now = new Date().toISOString();
       
       // 1. Update truck status
       batch.update(truckRef, {
@@ -100,36 +135,87 @@ export default function AdminTruckDetail() {
       });
 
       // 2. Update all orders in this truck and add tracking logs
-      if (id) {
-        const ordersQuery = query(collection(db, "orders"), where("truck_code", "==", id));
-        const ordersSnapshot = await getDocs(ordersQuery);
-        
-        ordersSnapshot.docs.forEach((orderDoc) => {
-          const orderData = orderDoc.data();
-          // Update order
-          batch.update(orderDoc.ref, {
-            status,
-            location,
-            last_updated: serverTimestamp(),
-          });
+      for (const order of orders) {
+        const orderRef = doc(db, "orders", order.id);
+        const historyEntry = {
+          status,
+          location,
+          timestamp: now,
+          note: `Cập nhật trạng thái từ xe ${truck.truck_code}: ${status}`
+        };
 
-          // Add tracking log for the order
-          const logId = `log_${orderData.tracking_code}_${status.replace(/\s+/g, '_')}_${Date.now()}`;
-          const logRef = doc(db, "tracking_logs", logId);
-          batch.set(logRef, {
-            tracking_code: orderData.tracking_code,
-            status,
-            timestamp: new Date().toISOString(),
-            location,
-            note: `Cập nhật trạng thái từ xe ${truck.truck_code}: ${status}`
-          });
+        // Update order with current status and append to history array
+        batch.update(orderRef, {
+          status,
+          location,
+          last_updated: serverTimestamp(),
+          history: [...(order.history || []), historyEntry]
+        });
+
+        // Also keep the separate tracking_logs for backward compatibility/redundancy
+        const logId = `log_${order.tracking_code}_${status.replace(/\s+/g, '_')}_${Date.now()}`;
+        const logRef = doc(db, "tracking_logs", logId);
+        batch.set(logRef, {
+          tracking_code: order.tracking_code,
+          status,
+          timestamp: now,
+          location,
+          note: `Cập nhật trạng thái từ xe ${truck.truck_code}: ${status}`
         });
       }
 
       await batch.commit();
+      setMessageModal({
+        isOpen: true,
+        title: "Thành công",
+        message: `Đã cập nhật trạng thái "${status}" cho xe và ${orders.length} đơn hàng.`,
+        type: "success"
+      });
     } catch (err: any) {
       console.error("Update status error:", err);
-      setError(err.message);
+      try {
+        handleFirestoreError(err, OperationType.UPDATE, `trucks/${id}`);
+      } catch (e: any) {
+        setMessageModal({
+          isOpen: true,
+          title: "Lỗi",
+          message: e.message,
+          type: "error"
+        });
+      }
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSaveTruck = async () => {
+    if (!id || isUpdating) return;
+    setIsUpdating(true);
+    try {
+      const truckRef = doc(db, "trucks", id);
+      await updateDoc(truckRef, {
+        destination: mapDestination(truckForm.destination),
+        last_updated: serverTimestamp()
+      });
+      setIsEditingTruck(false);
+      setMessageModal({
+        isOpen: true,
+        title: "Thành công",
+        message: "Đã cập nhật thông tin xe thành công.",
+        type: "success"
+      });
+    } catch (err: any) {
+      console.error("Save truck error:", err);
+      try {
+        handleFirestoreError(err, OperationType.UPDATE, `trucks/${id}`);
+      } catch (e: any) {
+        setMessageModal({
+          isOpen: true,
+          title: "Lỗi",
+          message: e.message,
+          type: "error"
+        });
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -151,12 +237,13 @@ export default function AdminTruckDetail() {
     try {
       const weight = parseFloat(editForm.weight) || 0;
       const volume = parseFloat(editForm.volume) || 0;
+      const destination = mapDestination(editForm.destination);
       
-      const { totalCost, pricePerKg, pricePerM3 } = calculateShippingFee(weight, volume, settings, editForm.destination);
+      const { totalCost, pricePerKg, pricePerM3 } = calculateShippingFee(weight, volume, settings, destination);
 
       const orderRef = doc(db, "orders", editingOrder.id);
       await updateDoc(orderRef, {
-        destination: editForm.destination,
+        destination,
         weight,
         volume,
         item_type: editForm.item_type,
@@ -166,9 +253,24 @@ export default function AdminTruckDetail() {
         last_updated: serverTimestamp(),
       });
       setEditingOrder(null);
+      setMessageModal({
+        isOpen: true,
+        title: "Thành công",
+        message: "Đã cập nhật thông tin đơn hàng thành công.",
+        type: "success"
+      });
     } catch (err: any) {
       console.error("Save order error:", err);
-      setError(err.message);
+      try {
+        handleFirestoreError(err, OperationType.UPDATE, `orders/${editingOrder.id}`);
+      } catch (e: any) {
+        setMessageModal({
+          isOpen: true,
+          title: "Lỗi",
+          message: e.message,
+          type: "error"
+        });
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -193,7 +295,12 @@ export default function AdminTruckDetail() {
       navigate("/admin/trucks");
     } catch (error) {
       console.error(error);
-      alert("Không thể xóa xe. Vui lòng thử lại.");
+      setMessageModal({
+        isOpen: true,
+        title: "Lỗi",
+        message: "Không thể xóa xe. Vui lòng thử lại.",
+        type: "error"
+      });
     }
   };
 
@@ -204,7 +311,12 @@ export default function AdminTruckDetail() {
       await deleteDoc(doc(db, "orders", orderId));
     } catch (error) {
       console.error(error);
-      alert("Không thể xóa đơn hàng. Vui lòng thử lại.");
+      setMessageModal({
+        isOpen: true,
+        title: "Lỗi",
+        message: "Không thể xóa đơn hàng. Vui lòng thử lại.",
+        type: "error"
+      });
     }
   };
 
@@ -258,14 +370,30 @@ export default function AdminTruckDetail() {
                   </div>
                   <div>
                     <h1 className="font-headline text-4xl font-black tracking-tight">{truck.truck_code}</h1>
-                    <p className="mt-1 text-xs font-bold uppercase tracking-widest opacity-40">Chi tiết xe vận chuyển / 车辆详情</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="text-xs font-bold uppercase tracking-widest opacity-40">Chi tiết xe vận chuyển / 车辆详情</p>
+                      <span className="h-1 w-1 rounded-full bg-surface-container-highest" />
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="h-3 w-3 text-primary" />
+                        <span className="text-xs font-bold text-primary">{mapDestination(truck.destination)}</span>
+                        <button 
+                          onClick={() => {
+                            setTruckForm({ destination: truck.destination || "" });
+                            setIsEditingTruck(true);
+                          }}
+                          className="ml-1 rounded-full p-1 hover:bg-primary/10 text-primary transition-colors"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
               
               <div className="text-right">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Cập nhật cuối</div>
-                <div className="mt-1 font-headline text-xl font-bold">{format(new Date(truck.last_updated), "dd/MM/yyyy HH:mm")}</div>
+                <div className="mt-1 font-headline text-xl font-bold">{safeFormatDate(truck.last_updated)}</div>
               </div>
             </div>
 
@@ -392,13 +520,6 @@ export default function AdminTruckDetail() {
                 </div>
               </div>
 
-              {error && (
-                <div className="flex items-center gap-3 rounded-2xl bg-error/10 p-4 text-error">
-                  <AlertCircle className="h-5 w-5" />
-                  <span className="text-sm font-medium">{error}</span>
-                </div>
-              )}
-
               <div className="rounded-3xl bg-surface-container-lowest p-8 shadow-editorial">
                 <div className="flex items-center gap-3 mb-6">
                   <Clock className="h-5 w-5 text-primary" />
@@ -439,6 +560,55 @@ export default function AdminTruckDetail() {
           </div>
         </div>
       </main>
+
+      {/* Edit Truck Modal */}
+      {isEditingTruck && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/20 backdrop-blur-sm p-6">
+          <div className="w-full max-w-md rounded-3xl bg-surface-container-lowest p-10 shadow-2xl">
+            <div className="mb-8 flex items-center justify-between">
+              <div>
+                <h3 className="font-headline text-2xl font-bold text-on-surface">Sửa thông tin xe</h3>
+                <p className="text-xs font-bold uppercase tracking-widest text-primary">{truck.truck_code}</p>
+              </div>
+              <button 
+                onClick={() => setIsEditingTruck(false)}
+                className="rounded-full bg-surface-container-high p-2 text-on-surface-variant hover:bg-surface-container-highest"
+              >
+                <ChevronLeft className="h-5 w-5 rotate-180" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Nơi đến / 目的地</label>
+                <input 
+                  type="text"
+                  value={truckForm.destination}
+                  onChange={(e) => setTruckForm({...truckForm, destination: e.target.value})}
+                  className="w-full rounded-xl border-none bg-surface-container-low p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
+                  placeholder="Ví dụ: HN, SG, Hà Nội..."
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  onClick={() => setIsEditingTruck(false)}
+                  className="flex-1 rounded-xl bg-surface-container-high py-4 text-sm font-bold text-on-surface transition-all hover:bg-surface-container-highest"
+                >
+                  Hủy / 取消
+                </button>
+                <button 
+                  onClick={handleSaveTruck}
+                  disabled={isUpdating}
+                  className="flex-1 signature-gradient rounded-xl py-4 text-sm font-bold text-on-primary shadow-lg transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                >
+                  {isUpdating ? "Đang lưu..." : "Lưu thay đổi / 保存"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Order Modal */}
       {editingOrder && (
@@ -518,6 +688,14 @@ export default function AdminTruckDetail() {
           </div>
         </div>
       )}
+
+      <MessageModal 
+        isOpen={messageModal.isOpen}
+        onClose={() => setMessageModal({ ...messageModal, isOpen: false })}
+        title={messageModal.title}
+        message={messageModal.message}
+        type={messageModal.type}
+      />
     </div>
   );
 }

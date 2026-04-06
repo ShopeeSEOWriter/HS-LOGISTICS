@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Package, Clock, Trash2, ChevronRight, Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, safeFormatDate } from "../lib/utils";
 import { format } from "date-fns";
 import { getTrackingHistory } from "../services/historyService";
 import { doc, getDoc, deleteDoc } from "firebase/firestore";
@@ -161,7 +161,7 @@ export default function UserHistory() {
                 <div className="flex items-center gap-2 text-on-surface-variant/60">
                   <Clock className="h-4 w-4" />
                   <span className="text-xs font-bold">
-                    {format(new Date(item.last_checked_at), "dd/MM HH:mm")}
+                    {safeFormatDate(item.last_checked_at, "dd/MM HH:mm")}
                   </span>
                 </div>
                 <Link

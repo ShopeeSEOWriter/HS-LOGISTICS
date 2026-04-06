@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, Table, Trash2, Save, History } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, mapDestination } from "../lib/utils";
 import * as XLSX from "xlsx";
-import { doc, setDoc, writeBatch, collection, serverTimestamp, addDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, writeBatch, collection, serverTimestamp, addDoc, getDoc, arrayUnion } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { notificationService } from "../services/notificationService";
+import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 
 interface ExcelUploadProps {
   onSuccess?: (results: any[]) => void;
@@ -23,6 +25,7 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
+  const [lastUploadCount, setLastUploadCount] = useState<number>(0);
   const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
   const [duplicates, setDuplicates] = useState<string[]>([]);
   const [settings, setSettings] = useState<any>(null);
@@ -65,29 +68,35 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
         const keys = Object.keys(firstRow);
         
         const findKey = (patterns: string[]) => 
-          keys.find(k => patterns.some(p => k.toLowerCase().includes(p.toLowerCase())));
+          keys.find(k => patterns.some(p => k.trim().toUpperCase().includes(p.toUpperCase())));
 
-        const truckKey = findKey(["Truck Code", "Mã xe", "Container", "Xe"]) || "";
-        const trackingKey = findKey(["Tracking Code", "Mã vận đơn", "Mã đơn", "Bill"]) || "";
+        const truckKey = findKey(["Truck Code", "Mã xe", "Container", "Xe", "Mã container"]) || "";
+        const trackingKey = findKey(["Tracking Code", "Mã vận đơn", "Mã đơn", "Bill", "Mã số", "Mã kiện", "Mã hàng", "MA HANG"]) || "";
         const weightKey = findKey(["Weight", "Cân nặng", "Khối lượng", "Kg"]) || "";
         const volumeKey = findKey(["Volume", "Thể tích", "Khối", "M3"]) || "";
-        const destinationKey = findKey(["Destination", "Nơi đến", "Địa chỉ"]) || "";
+        const destinationKey = findKey(["NOI DEN", "Destination", "Nơi đến", "Địa chỉ", "NOI_DEN"]) || "";
         const itemTypeKey = findKey(["Item Type", "Mặt hàng", "Loại hàng"]) || "";
 
         if (!trackingKey) {
-          setError("Không tìm thấy cột 'Mã vận đơn' hoặc 'Tracking Code'.");
+          setError("Không tìm thấy cột 'Mã vận đơn', 'Tracking Code', 'Mã số', 'Mã kiện' hoặc 'Mã hàng'.");
           return;
         }
 
-        const formattedData: PreviewRow[] = jsonData.map(row => ({
-          truck_code: String(row[truckKey] || "CHƯA XÁC ĐỊNH").trim(),
-          tracking_code: String(row[trackingKey] || "").trim(),
-          weight: parseFloat(row[weightKey]) || 0,
-          volume: parseFloat(row[volumeKey]) || 0,
-          destination: String(row[destinationKey] || "Chưa xác định").trim(),
-          item_type: String(row[itemTypeKey] || "Hàng hóa").trim(),
-          ...row
-        })).filter(row => row.tracking_code !== "");
+        const formattedData: PreviewRow[] = jsonData.map(row => {
+          const rawDest = String(row[destinationKey] || "").trim();
+          const destination = mapDestination(rawDest);
+          
+          return {
+            // Normalize: Preserve hyphens and other characters, only remove spaces
+            truck_code: String(row[truckKey] || "CHƯA XÁC ĐỊNH").trim().toUpperCase().replace(/\s+/g, ""),
+            tracking_code: String(row[trackingKey] || "").trim().toUpperCase().replace(/\s+/g, ""),
+            weight: parseFloat(row[weightKey]) || 0,
+            volume: parseFloat(row[volumeKey]) || 0,
+            destination: destination,
+            item_type: String(row[itemTypeKey] || "Hàng hóa").trim(),
+            ...row
+          };
+        }).filter(row => row.tracking_code !== "");
 
         // Check for duplicates in file
         const seen = new Set<string>();
@@ -151,6 +160,12 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
         trucksToUpdate.add(truck_code);
 
         const { totalCost, pricePerKg, pricePerM3 } = calculateShippingFee(weight, volume, settings, destination);
+        const historyEntry = {
+          status: "Đã bốc hàng lên xe",
+          location: "Kho Trung Quốc",
+          timestamp: now,
+          note: `Hàng đã được bốc lên xe ${truck_code} (Nhập từ Excel)`
+        };
 
         const orderRef = doc(db, "orders", tracking_code);
         batch.set(orderRef, {
@@ -166,6 +181,7 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
           status: "Đã bốc hàng lên xe",
           location: "Kho Trung Quốc",
           last_updated: serverTimestamp(),
+          history: arrayUnion(historyEntry),
           details: row,
         }, { merge: true });
 
@@ -185,11 +201,13 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
       for (const tCode of Array.from(trucksToUpdate)) {
         const truckRef = doc(db, "trucks", tCode);
         const truckOrders = previewData.filter(r => r.truck_code === tCode);
+        const truckDestination = truckOrders.length > 0 ? truckOrders[0].destination : "Chưa xác định";
         
         batch.set(truckRef, {
           truck_code: tCode,
           status: "Đã bốc hàng",
           location: "Đông Hưng",
+          destination: truckDestination,
           order_count: truckOrders.length,
           last_updated: serverTimestamp(),
         }, { merge: true });
@@ -205,12 +223,21 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
         status: "Success"
       });
 
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (batchErr) {
+        handleFirestoreError(batchErr, OperationType.WRITE, "orders/trucks/logs (bulk)");
+      }
       
+      setLastUploadCount(previewData.length);
       setSuccess(true);
       setFile(null);
       setPreviewData([]);
       setDuplicates([]);
+      
+      // Notify user clearly as requested
+      alert(`Đã nạp ${previewData.length} vận đơn vào hệ thống. Bạn có thể tìm kiếm ngay bây giờ.`);
+      
       if (onSuccess) onSuccess(previewData);
     } catch (err: any) {
       console.error("Upload error:", err);
@@ -380,7 +407,7 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
           </div>
           <div className="text-center">
             <h3 className="font-headline text-3xl font-black">Nhập dữ liệu thành công!</h3>
-            <p className="mt-2 text-sm font-medium opacity-80">Tất cả đơn hàng đã được gán vào xe và cập nhật trạng thái.</p>
+            <p className="mt-2 text-sm font-medium opacity-80">Đã cập nhật thành công {lastUploadCount} mã vận đơn vào hệ thống.</p>
           </div>
           <button 
             onClick={() => setSuccess(false)}

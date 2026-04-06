@@ -8,42 +8,58 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        (request.auth.token.email == "chichine153@gmail.com" && request.auth.token.email_verified == true) ||
-        (request.auth.token.email == "zadavn1@gmail.com" && request.auth.token.email_verified == true)
+        (exists(/databases/$(database)/documents/users/$(request.auth.token.email)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin') ||
+        request.auth.token.email == "chichine153@gmail.com" ||
+        request.auth.token.email == "zadavn1@gmail.com" ||
+        request.auth.token.email == "muadongnovact2@gmail.com"
       );
     }
 
     // Trucks
     match /trucks/{truckId} {
       allow read: if true;
-      allow write: if true; // Insecure: allow server (unauthenticated) to write
+      allow write: if isAdmin();
     }
 
-    // Orders
+    // Orders (Tracking)
     match /orders/{orderId} {
       allow read: if true;
-      allow write: if true; // Insecure: allow server (unauthenticated) to write
+      allow write: if isAdmin();
+      
+      // Allow logs and other subcollections
+      match /{allPaths=**} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
     }
 
-    // Tracking Logs
+    // Tracking Logs (Legacy or standalone)
     match /tracking_logs/{logId} {
       allow read: if true;
-      allow write: if true; // Insecure: allow server (unauthenticated) to write
+      allow write: if isAdmin();
     }
 
     // Users
     match /users/{userId} {
-      allow get: if true; // Allow server to get user by email (ID)
-      allow list: if true;
-      allow create: if true; // Allow registration
-      allow update: if true;
-      allow delete: if true;
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if isAuthenticated() && request.auth.token.email == userId;
+      allow update: if isAuthenticated() && request.auth.token.email == userId;
+      allow delete: if isAdmin();
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read, update: if isAuthenticated() && request.auth.uid == resource.data.user_id;
+      allow create: if true; // Allow system/other users to create notifications
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.user_id;
     }
 
     // User Tracking History
     match /user_tracking_history/{historyId} {
-      allow read, delete: if isAuthenticated() && request.auth.uid == resource.data.user_id;
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.user_id);
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.user_id;
       allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
       allow update: if isAuthenticated() && request.auth.uid == resource.data.user_id && request.resource.data.user_id == resource.data.user_id;
     }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc, writeBatch, getDocs, where, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Truck, Package, ChevronRight, Clock, Plus, LayoutDashboard, Boxes, Scale, Headset, Trash2, X, MapPin } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import ExcelUpload from "../components/ExcelUpload";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
@@ -10,6 +10,8 @@ import { useAuth } from "../hooks/useAuth";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 
 import BulkUpdateModal from "../components/BulkUpdateModal";
+import ConfirmDialog from "../components/ConfirmDialog";
+import MessageModal from "../components/MessageModal";
 
 import { getShippingSettings, updateShippingSettings, ShippingSettings } from "../services/settingsService";
 
@@ -19,7 +21,15 @@ export default function AdminTrucks() {
   const [selectedStatus, setSelectedStatus] = useState<string>("Tất cả");
   const [showUpload, setShowUpload] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [messageModal, setMessageModal] = useState<{ isOpen: boolean, title: string, message: string, type: 'success' | 'error' | 'info' }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info"
+  });
   const [newTruckCode, setNewTruckCode] = useState("");
+  const [newTruckDestination, setNewTruckDestination] = useState("Hà Nội");
   const [bulkUpdateStatus, setBulkUpdateStatus] = useState<{ label: string, location: string } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<ShippingSettings>({
@@ -49,10 +59,20 @@ export default function AdminTrucks() {
     try {
       await updateShippingSettings(settings);
       setShowSettings(false);
-      alert("Đã cập nhật cài đặt vận chuyển!");
+      setMessageModal({
+        isOpen: true,
+        title: "Thành công",
+        message: "Đã cập nhật cài đặt vận chuyển!",
+        type: "success"
+      });
     } catch (error) {
       console.error(error);
-      alert("Không thể cập nhật cài đặt.");
+      setMessageModal({
+        isOpen: true,
+        title: "Lỗi",
+        message: "Không thể cập nhật cài đặt.",
+        type: "error"
+      });
     }
   };
 
@@ -127,9 +147,20 @@ export default function AdminTrucks() {
       }
 
       await batch.commit();
+      setMessageModal({
+        isOpen: true,
+        title: "Thành công",
+        message: `Đã xóa xe ${truckId} thành công!`,
+        type: "success"
+      });
     } catch (error) {
       console.error(error);
-      alert("Không thể xóa xe. Vui lòng thử lại.");
+      setMessageModal({
+        isOpen: true,
+        title: "Lỗi",
+        message: "Không thể xóa xe. Vui lòng thử lại.",
+        type: "error"
+      });
     }
   };
 
@@ -141,7 +172,12 @@ export default function AdminTrucks() {
       const truckRef = doc(db, "trucks", newTruckCode.trim());
       const truckSnap = await getDoc(truckRef);
       if (truckSnap.exists()) {
-        alert("Mã xe này đã tồn tại!");
+        setMessageModal({
+          isOpen: true,
+          title: "Lỗi",
+          message: "Mã xe này đã tồn tại!",
+          type: "error"
+        });
         return;
       }
 
@@ -150,15 +186,81 @@ export default function AdminTrucks() {
         status: "Đã bốc hàng",
         last_updated: new Date().toISOString(),
         order_count: 0,
-        destination: "Chưa xác định",
+        destination: mapDestination(newTruckDestination),
         created_at: new Date().toISOString()
       });
 
       setNewTruckCode("");
+      setNewTruckDestination("Hà Nội");
       setShowCreateModal(false);
-    } catch (error) {
+      setMessageModal({
+        isOpen: true,
+        title: "Thành công",
+        message: `Đã tạo xe ${newTruckCode.trim()} thành công!`,
+        type: "success"
+      });
+    } catch (error: any) {
       console.error(error);
-      alert("Không thể tạo xe. Vui lòng thử lại.");
+      try {
+        handleFirestoreError(error, OperationType.CREATE, `trucks/${newTruckCode.trim()}`);
+      } catch (e: any) {
+        setMessageModal({
+          isOpen: true,
+          title: "Lỗi",
+          message: e.message,
+          type: "error"
+        });
+      }
+    }
+  };
+
+  const [isClearing, setIsClearing] = useState(false);
+
+  const handleClearAllData = async () => {
+    setIsClearing(true);
+    try {
+      // 1. Get all collections to clear
+      const collectionsToClear = ["trucks", "orders", "tracking_logs", "import_history", "user_tracking_history"];
+      
+      for (const collName of collectionsToClear) {
+        const q = query(collection(db, collName));
+        const snapshot = await getDocs(q);
+        
+        if (snapshot.empty) continue;
+
+        // Delete in batches of 500 (Firestore limit)
+        const docs = snapshot.docs;
+        for (let i = 0; i < docs.length; i += 500) {
+          const batch = writeBatch(db);
+          const chunk = docs.slice(i, i + 500);
+          chunk.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+
+      setMessageModal({
+        isOpen: true,
+        title: "Thành công",
+        message: "Đã xóa toàn bộ dữ liệu thành công! Hệ thống đã sẵn sàng để nhập mới.",
+        type: "success"
+      });
+      // Delay reload to let user see the message
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (error: any) {
+      console.error("Clear data error:", error);
+      try {
+        handleFirestoreError(error, OperationType.DELETE, "all_data");
+      } catch (e: any) {
+        setMessageModal({
+          isOpen: true,
+          title: "Lỗi",
+          message: e.message,
+          type: "error"
+        });
+      }
+    } finally {
+      setIsClearing(false);
+      setShowClearConfirm(false);
     }
   };
 
@@ -210,6 +312,14 @@ export default function AdminTrucks() {
           </div>
           
           <div className="flex gap-4">
+            <button 
+              onClick={() => setShowClearConfirm(true)}
+              disabled={isClearing}
+              className="flex items-center gap-2 rounded-full bg-error/10 px-8 py-4 text-sm font-bold text-error shadow-xl transition-all hover:bg-error/20 active:scale-95 disabled:opacity-50"
+            >
+              {isClearing ? "Đang xóa..." : "Xóa hết dữ liệu"}
+              <Trash2 className="h-4 w-4" />
+            </button>
             <button 
               onClick={() => setShowSettings(true)}
               className="flex items-center gap-2 rounded-full bg-surface-container-high px-8 py-4 text-sm font-bold text-on-surface shadow-xl transition-all hover:opacity-90 active:scale-95"
@@ -454,6 +564,18 @@ export default function AdminTrucks() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Nơi đến / 目的地</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="Ví dụ: HN, SG, Hà Nội..."
+                    value={newTruckDestination}
+                    onChange={(e) => setNewTruckDestination(e.target.value)}
+                    className="w-full rounded-xl border-none bg-surface-container-low p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
                 <button 
                   type="submit"
                   className="w-full signature-gradient rounded-xl py-4 text-sm font-bold text-on-primary shadow-lg transition-all hover:scale-[1.02] active:scale-95"
@@ -561,7 +683,7 @@ export default function AdminTrucks() {
                 <div className="flex items-center gap-2 text-on-surface-variant/60">
                   <Clock className="h-4 w-4" />
                   <span className="text-xs font-bold">
-                    {format(new Date(truck.last_updated), "dd/MM HH:mm")}
+                    {safeFormatDate(truck.last_updated, "dd/MM HH:mm")}
                   </span>
                 </div>
               </div>
@@ -582,10 +704,34 @@ export default function AdminTrucks() {
           onClose={() => setBulkUpdateStatus(null)}
           onSuccess={(count) => {
             setBulkUpdateStatus(null);
-            alert(`Đã cập nhật thành công ${count} mã vận đơn!`);
+            setMessageModal({
+              isOpen: true,
+              title: "Thành công",
+              message: `Đã cập nhật thành công ${count} mã vận đơn!`,
+              type: "success"
+            });
           }}
         />
       )}
+
+      <MessageModal 
+        isOpen={messageModal.isOpen}
+        onClose={() => setMessageModal({ ...messageModal, isOpen: false })}
+        title={messageModal.title}
+        message={messageModal.message}
+        type={messageModal.type}
+      />
+
+      <ConfirmDialog 
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={handleClearAllData}
+        title="Xóa toàn bộ dữ liệu"
+        message="CẢNH BÁO: Hành động này sẽ XÓA TẤT CẢ dữ liệu xe, đơn hàng và lịch sử theo dõi. Bạn có chắc chắn muốn tiếp tục?"
+        confirmText="Xác nhận xóa"
+        variant="danger"
+        requiresInput="DELETE"
+      />
     </div>
   );
 }

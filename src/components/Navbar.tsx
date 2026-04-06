@@ -66,8 +66,16 @@ export default function Navbar() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant" />
                 <input 
                   type="text" 
-                  placeholder="Tìm kiếm vận đơn hoặc khách hàng / 搜索单号或客户..."
+                  placeholder="Tìm kiếm vận đơn hoặc khách hàng / 搜索单号 hoặc 客户..."
                   className="w-full rounded-full border-none bg-surface-container-low py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary-container"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = (e.target as HTMLInputElement).value.trim().toUpperCase().replace(/\s+/g, "");
+                      if (val) {
+                        window.location.href = `/tracking/${val}`;
+                      }
+                    }
+                  }}
                 />
               </div>
             </div>

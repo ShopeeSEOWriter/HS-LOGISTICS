@@ -31,7 +31,7 @@ export default function Home() {
       await saveTrackingHistory(user.id, trackingCode.trim());
     }
 
-    navigate(`/tracking/${trackingCode.trim()}`);
+    navigate(`/tracking/${trackingCode.trim().toUpperCase().replace(/\s+/g, "")}`);
   };
 
   return (

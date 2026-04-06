@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc, limit, writeBatch } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Bell, Package, Check, Trash2, Clock, X } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, safeFormatDate } from "../lib/utils";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 
@@ -105,7 +105,7 @@ export default function NotificationDropdown({ userId, onClose }: NotificationDr
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1 text-[10px] text-on-surface-variant/60">
                         <Clock className="h-3 w-3" />
-                        <span>{n.created_at?.toDate ? format(n.created_at.toDate(), "dd/MM HH:mm") : "Vừa xong"}</span>
+                        <span>{safeFormatDate(n.created_at, "dd/MM HH:mm")}</span>
                       </div>
                       {!n.read_status && (
                         <button 

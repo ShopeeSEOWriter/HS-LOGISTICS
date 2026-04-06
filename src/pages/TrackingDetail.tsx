@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Package, Truck, MapPin, CheckCircle2, Clock, Info, Headset, Route, AlertCircle, RefreshCw, ChevronRight, Scale } from "lucide-react";
+import { Package, Truck, MapPin, CheckCircle2, Clock, Info, Headset, Route, AlertCircle, RefreshCw, ChevronRight, Scale, AlertTriangle, Boxes } from "lucide-react";
 import { motion } from "motion/react";
 import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, collection, query, where, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { cn } from "../lib/utils";
+import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import { format } from "date-fns";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
+import { useAuth } from "../hooks/useAuth";
 
 const STATUS_STEPS = [
   "Đã tạo đơn hàng",
@@ -59,97 +60,200 @@ export default function TrackingDetail() {
   const [logs, setLogs] = useState<any[]>([]);
   const [truckOrders, setTruckOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rawLogs, setRawLogs] = useState<any[]>([]);
+  const { user, addTrackingToHistory } = useAuth();
 
   useEffect(() => {
     if (!id) return;
 
+    const normalizedId = id.trim().toUpperCase();
+    // Search ID: Preserve hyphens as requested
+    const searchId = normalizedId.replace(/[^A-Z0-9-]/g, ""); 
+    
     setLoading(true);
     setOrder(null);
-    setLogs([]);
+    setRawLogs([]);
     setTruckOrders([]);
 
-    const orderRef = doc(db, "orders", id);
-    const truckRef = doc(db, "trucks", id);
+    // We search by the searchId
+    const orderRef = doc(db, "orders", searchId);
+    const truckRef = doc(db, "trucks", searchId);
 
     let unsubOrder = () => {};
     let unsubTruck = () => {};
     let unsubTruckOrders = () => {};
+    let unsubLogs = () => {};
 
     unsubOrder = onSnapshot(orderRef, (docSnap) => {
       if (docSnap.exists()) {
-        setOrder({ id: docSnap.id, ...docSnap.data(), type: "order" });
+        const data = docSnap.data();
+        const orderData = { id: docSnap.id, ...data, type: "order" } as any;
+        setOrder(orderData);
         setLoading(false);
+
+        if (user && user.email && orderData.tracking_code) {
+          addTrackingToHistory(orderData.tracking_code);
+        }
       } else {
-        // If not an order, try to find as a truck
-        unsubTruck = onSnapshot(truckRef, (truckSnap) => {
-          if (truckSnap.exists()) {
-            const truckData = truckSnap.data();
-            setOrder({ 
-              id: truckSnap.id, 
-              tracking_code: truckSnap.id,
-              status: truckData.status,
-              last_updated: truckData.last_updated,
-              type: "truck",
-              order_count: truckData.order_count,
-              destination: truckData.destination
-            });
-
-            // If it's a truck, fetch the orders inside it
-            if (id) {
-              const q = query(collection(db, "orders"), where("truck_code", "==", id));
-              unsubTruckOrders = onSnapshot(q, (snapshot) => {
-                const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                setTruckOrders(list);
-              }, (err) => handleFirestoreError(err, OperationType.LIST, "orders"));
-            }
-
+        // Try searching by field if ID doesn't match, prioritize most recent
+        // We use the fuzzyId for the query as well
+        const orderQuery = query(
+          collection(db, "orders"), 
+          where("tracking_code", "==", searchId),
+          orderBy("last_updated", "desc")
+        );
+        const unsubOrderQuery = onSnapshot(orderQuery, (orderSnap) => {
+          if (!orderSnap.empty) {
+            const docSnap = orderSnap.docs[0];
+            const data = docSnap.data();
+            const orderData = { id: docSnap.id, ...data, type: "order" } as any;
+            setOrder(orderData);
+            setLoading(false);
+            unsubOrderQuery();
           } else {
-            setOrder(null);
+            // If not an order, try to find as a truck
+            unsubTruck = onSnapshot(truckRef, (truckSnap) => {
+              if (truckSnap.exists()) {
+                const truckData = truckSnap.data();
+                setOrder({ 
+                  id: truckSnap.id, 
+                  tracking_code: truckSnap.id,
+                  status: truckData.status,
+                  last_updated: truckData.last_updated,
+                  type: "truck",
+                  order_count: truckData.order_count,
+                  destination: truckData.destination
+                });
+                setLoading(false);
+                unsubTruck();
+
+                // Fetch orders inside this truck
+                const q = query(collection(db, "orders"), where("truck_code", "==", searchId));
+                unsubTruckOrders = onSnapshot(q, (snapshot) => {
+                  const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                  setTruckOrders(list);
+                }, (err) => handleFirestoreError(err, OperationType.LIST, "orders"));
+              } else {
+                // Try searching truck by field
+                const truckQuery = query(collection(db, "trucks"), where("truck_code", "==", searchId));
+                const unsubTruckQuery = onSnapshot(truckQuery, (truckSnapField) => {
+                  if (!truckSnapField.empty) {
+                    const tDoc = truckSnapField.docs[0];
+                    const truckData = tDoc.data();
+                    setOrder({ 
+                      id: tDoc.id, 
+                      tracking_code: tDoc.id,
+                      status: truckData.status,
+                      last_updated: truckData.last_updated,
+                      type: "truck",
+                      order_count: truckData.order_count,
+                      destination: truckData.destination
+                    });
+                    setLoading(false);
+
+                    // Fetch orders inside this truck
+                    const q = query(collection(db, "orders"), where("truck_code", "==", searchId));
+                    unsubTruckOrders = onSnapshot(q, (snapshot) => {
+                      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                      setTruckOrders(list);
+                    }, (err) => handleFirestoreError(err, OperationType.LIST, "orders"));
+                  } else {
+                    setOrder(null);
+                    setLoading(false);
+                  }
+                  unsubTruckQuery();
+                }, (err) => handleFirestoreError(err, OperationType.LIST, "trucks"));
+              }
+            }, (error) => {
+              handleFirestoreError(error, OperationType.GET, `trucks/${searchId}`);
+              setLoading(false);
+            });
+            unsubOrderQuery();
           }
-          setLoading(false);
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `trucks/${id}`);
-          setLoading(false);
-        });
+        }, (err) => handleFirestoreError(err, OperationType.LIST, "orders"));
       }
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `orders/${id}`);
+      handleFirestoreError(error, OperationType.GET, `orders/${searchId}`);
       setLoading(false);
     });
 
-    // Tracking logs for this ID (could be order code or truck code)
-    if (id) {
-      const logsQuery = query(
-        collection(db, "tracking_logs"),
-        where("tracking_code", "==", id),
-        orderBy("timestamp", "asc")
-      );
-      const unsubscribeLogs = onSnapshot(logsQuery, (snapshot) => {
-        const logList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-        
-        // Filter duplicates by status, keeping only the latest one per status
-        const statusMap = new Map();
-        logList.forEach(log => {
-          statusMap.set(log.status, log);
-        });
-        
-        const uniqueLogs = Array.from(statusMap.values()).sort((a, b) => 
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
-        
-        setLogs(uniqueLogs);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, "tracking_logs");
-      });
+    // Tracking logs for this ID
+    const logsQuery = query(
+      collection(db, "tracking_logs"),
+      where("tracking_code", "==", searchId),
+      orderBy("timestamp", "asc")
+    );
+    unsubLogs = onSnapshot(logsQuery, (snapshot) => {
+      const logList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      setRawLogs(logList);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "tracking_logs");
+    });
 
-      return () => {
-        unsubOrder();
-        unsubTruck();
-        unsubTruckOrders();
-        unsubscribeLogs();
-      };
-    }
+    return () => {
+      unsubOrder();
+      unsubTruck();
+      unsubTruckOrders();
+      unsubLogs();
+    };
   }, [id]);
+
+  // Merge logs and history, and calculate delays
+  useEffect(() => {
+    let combinedLogs = [...rawLogs];
+    if (order?.history) {
+      const historyWithIds = order.history.map((h: any, i: number) => ({ ...h, id: `history_${i}` }));
+      combinedLogs = [...combinedLogs, ...historyWithIds];
+    }
+
+    // Filter duplicates by status, keeping only the latest one per status
+    const statusMap = new Map();
+    combinedLogs.forEach(log => {
+      const existing = statusMap.get(log.status);
+      const logDate = new Date(log.timestamp);
+      if (isNaN(logDate.getTime())) return;
+      
+      if (!existing || logDate > new Date(existing.timestamp)) {
+        statusMap.set(log.status, log);
+      }
+    });
+    
+    const uniqueLogs = Array.from(statusMap.values()).sort((a, b) => {
+      const dateA = new Date(a.timestamp);
+      const dateB = new Date(b.timestamp);
+      return dateA.getTime() - dateB.getTime();
+    });
+    
+    setLogs(uniqueLogs);
+
+    // Delay Logic
+    if (order && order.type === "order" && uniqueLogs.length > 0) {
+      const lastLog = uniqueLogs[uniqueLogs.length - 1];
+      const lastUpdate = new Date(lastLog.timestamp);
+      if (isNaN(lastUpdate.getTime())) return;
+      
+      const now = new Date();
+      const diffDays = (now.getTime() - lastUpdate.getTime()) / (1000 * 3600 * 24);
+
+      let isDelayed = diffDays > 3;
+      let isCustomsWarning = false;
+
+      // Check for customs delay
+      const customsLog = uniqueLogs.find(l => l.status.includes("Thông quan") || l.status.includes("Hải quan"));
+      if (customsLog && order.status.includes("Thông quan")) {
+        const customsDate = new Date(customsLog.timestamp);
+        if (!isNaN(customsDate.getTime())) {
+          const customsDiff = (now.getTime() - customsDate.getTime()) / (1000 * 3600 * 24);
+          if (customsDiff > 2) {
+            isCustomsWarning = true;
+          }
+        }
+      }
+
+      // Update order state with delay flags (local only for now, could be persisted)
+      setOrder((prev: any) => prev ? { ...prev, isDelayed, isCustomsWarning } : null);
+    }
+  }, [rawLogs, order?.history]);
 
   if (loading) {
     return (
@@ -184,42 +288,58 @@ export default function TrackingDetail() {
       {/* Hero Tracking Summary */}
       <div className="relative z-10 mb-16">
         <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
-          <div className="space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Trạng thái vận chuyển / 物流状态</span>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full bg-primary/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-primary">
+                {order.type === "order" ? "Mã vận đơn / 运单号" : "Mã xe / 车号"}
+              </span>
+              {order.isDelayed && (
+                <span className="flex items-center gap-1.5 rounded-full bg-error/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-error animate-pulse">
+                  <AlertTriangle className="h-3 w-3" />
+                  Bị chậm / 延迟
+                </span>
+              )}
+              {order.isCustomsWarning && (
+                <span className="flex items-center gap-1.5 rounded-full bg-warning/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-warning">
+                  <Clock className="h-3 w-3" />
+                  Đang thông quan / 清关中
+                </span>
+              )}
+            </div>
             <h1 className="font-headline text-5xl font-black tracking-tighter text-on-surface md:text-7xl">
-              {order.tracking_code}
+              {order.tracking_code || order.id}
             </h1>
           </div>
+          
           <div className="flex flex-col items-start gap-3 md:items-end">
-            {/* Delay Warning */}
-            {(() => {
-              const lastUpdate = new Date(order.last_updated);
-              const now = new Date();
-              const diffDays = Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24));
-              if (diffDays >= 3 && order.status !== "Đã giao hàng") {
-                return (
-                  <div className="flex items-center gap-2 rounded-lg bg-error/10 px-3 py-1.5 text-[10px] font-bold text-error animate-pulse">
-                    <AlertCircle className="h-3 w-3" />
-                    CẢNH BÁO: ĐƠN HÀNG CẬP NHẬT CHẬM ({diffDays} ngày)
-                  </div>
-                );
-              }
-              return null;
-            })()}
-            
-            <div className="flex items-center gap-3 rounded-full bg-secondary-container px-5 py-2 text-sm font-bold text-on-secondary-container shadow-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+            <div className={cn(
+              "flex items-center gap-3 rounded-full px-6 py-3 text-sm font-bold shadow-sm transition-all",
+              order.status === "Đã giao hàng" ? "bg-green-100 text-green-700" : 
+              order.isDelayed ? "bg-error/10 text-error" : "bg-primary/10 text-primary"
+            )}>
+              <span className="relative flex h-2.5 w-2.5">
+                <span className={cn(
+                  "absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
+                  order.status === "Đã giao hàng" ? "bg-green-400" : 
+                  order.isDelayed ? "bg-error" : "bg-primary"
+                )}></span>
+                <span className={cn(
+                  "relative inline-flex h-2.5 w-2.5 rounded-full",
+                  order.status === "Đã giao hàng" ? "bg-green-600" : 
+                  order.isDelayed ? "bg-error" : "bg-primary"
+                )}></span>
               </span>
               {order.status}
             </div>
             <div className="flex flex-col items-start gap-1 md:items-end">
-              <p className="text-xs font-bold text-primary uppercase tracking-tighter">
+              <p className={cn(
+                "text-xs font-bold uppercase tracking-tighter",
+                order.isDelayed ? "text-error" : "text-primary"
+              )}>
                 Vị trí hiện tại: {STATUS_LOCATIONS[order.status] || "Đang cập nhật"}
               </p>
               <p className="text-[10px] font-medium text-on-surface-variant">
-                Cập nhật lần cuối: {format(new Date(order.last_updated), "dd/MM/yyyy HH:mm")}
+                Cập nhật lần cuối: {safeFormatDate(order.last_updated)}
               </p>
             </div>
           </div>
@@ -240,13 +360,13 @@ export default function TrackingDetail() {
                   unit="VND" 
                   icon={<Scale className="h-4 w-4" />}
                 />
-                <Stat label="Nơi đến / 目的地" value={order.destination || "N/A"} />
+                <Stat label="Nơi đến / 目的地" value={mapDestination(order.destination)} />
               </>
             ) : (
               <>
                 <Stat label="Mã xe / 车号" value={order.id} />
                 <Stat label="Số kiện / 包裹数" value={order.order_count || "0"} />
-                <Stat label="Nơi đến / 目的地" value={order.destination || "Chưa xác định"} />
+                <Stat label="Nơi đến / 目的地" value={mapDestination(order.destination)} />
                 <Stat label="Phương thức / 运输方式" value="Bộ / 陆运" icon={<Truck className="h-4 w-4" />} />
               </>
             )}
@@ -289,9 +409,10 @@ export default function TrackingDetail() {
                 status={index === logs.length - 1 ? "active" : "completed"}
                 title={log.status}
                 subLabel={STATUS_CHINESE[log.status]}
-                time={format(new Date(log.timestamp), "dd/MM/yyyy HH:mm")}
+                time={safeFormatDate(log.timestamp)}
                 description={log.note}
                 tag={log.location || STATUS_LOCATIONS[log.status]}
+                isDelayed={index === logs.length - 1 && order.isDelayed}
               />
             ))}
             
@@ -314,13 +435,14 @@ export default function TrackingDetail() {
               <HubBadge label="Nguồn / 始发地" city="Đông Hưng / 东兴" />
               <HubBadge 
                 label="Đến / 目的地" 
-                city={
-                  order.destination === "Hà Nội" ? "Hà Nội / 河内" :
-                  order.destination === "Hồ Chí Minh" ? "Hồ Chí Minh / 胡志明" :
-                  order.destination === "Hải Phòng" ? "Hải Phòng / 海防" :
-                  order.destination === "Đà Nẵng" ? "Đà Nẵng / 岘港" :
-                  (order.destination || "Hà Nội / 河内")
-                } 
+                city={(() => {
+                  const dest = mapDestination(order.destination);
+                  if (dest === "Hà Nội") return "Hà Nội / 河内";
+                  if (dest === "Hồ Chí Minh") return "Hồ Chí Minh / 胡志明";
+                  if (dest === "Hải Phòng") return "Hải Phòng / 海防";
+                  if (dest === "Đà Nẵng") return "Đà Nẵng / 岘港";
+                  return dest;
+                })()} 
               />
             </div>
 
@@ -376,7 +498,7 @@ export default function TrackingDetail() {
               <div className="grid grid-cols-2 gap-x-12 gap-y-8">
                 <ManifestItem label="Mã vận đơn / 运单号" value={order.tracking_code} />
                 <ManifestItem label="Mã xe / 车号" value={order.truck_code} />
-                <ManifestItem label="Nơi đến / 目的地" value={order.destination} />
+                <ManifestItem label="Nơi đến / 目的地" value={mapDestination(order.destination)} />
                 <ManifestItem label="Loại hàng / 货物类型" value={order.item_type} />
                 <ManifestItem 
                   label="Lưu ý xử lý / 装卸说明" 
@@ -406,7 +528,7 @@ function Stat({ label, value, unit, icon }: any) {
   );
 }
 
-function TimelineItem({ status, title, subLabel, time, description, tag }: any) {
+function TimelineItem({ status, title, subLabel, time, description, tag, isDelayed }: any) {
   const isChina = tag === "Trung Quốc" || tag === "Kho Trung Quốc";
   const isVietnam = tag === "Việt Nam" || tag === "Hà Nội" || tag === "Nội địa VN" || tag === "Người nhận";
   
@@ -414,21 +536,21 @@ function TimelineItem({ status, title, subLabel, time, description, tag }: any) 
     <div className="relative flex gap-6">
       <div className={cn(
         "relative z-10 flex h-6 w-6 items-center justify-center rounded-full border-4 border-surface",
-        status === "completed" && "bg-secondary-container text-on-secondary-container",
-        status === "active" && "bg-primary text-white shadow-[0_0_15px_rgba(255,69,0,0.3)]",
+        status === "completed" && "bg-green-100 text-green-600",
+        status === "active" && (isDelayed ? "bg-error text-white" : "bg-primary text-white shadow-[0_0_15px_rgba(255,69,0,0.3)]"),
         status === "pending" && "bg-surface-container"
       )}>
         {status === "completed" && <CheckCircle2 className="h-3 w-3" />}
-        {status === "active" && <RefreshCw className="h-3 w-3 animate-spin-slow" />}
+        {status === "active" && <RefreshCw className={cn("h-3 w-3", !isDelayed && "animate-spin-slow")} />}
       </div>
       
       <div className={cn(
         "flex-grow rounded-2xl p-4 transition-all",
-        status === "active" && "bg-surface-container-low border-l-2 border-primary"
+        status === "active" && (isDelayed ? "bg-error/5 border-l-2 border-error" : "bg-surface-container-low border-l-2 border-primary")
       )}>
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className={cn("text-sm font-bold", status === "active" ? "text-primary" : "text-on-surface")}>{title}</p>
+            <p className={cn("text-sm font-bold", status === "active" ? (isDelayed ? "text-error" : "text-primary") : "text-on-surface")}>{title}</p>
             {subLabel && <p className="text-[10px] font-medium opacity-50">{subLabel}</p>}
           </div>
           {tag && (

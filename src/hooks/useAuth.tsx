@@ -4,7 +4,7 @@ import {
   signOut, 
   User as FirebaseUser 
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, arrayUnion } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 
 interface User {
@@ -12,6 +12,7 @@ interface User {
   email: string;
   role?: string;
   created_at: string;
+  history_tracking?: string[];
 }
 
 interface AuthContextType {
@@ -19,6 +20,7 @@ interface AuthContextType {
   loading: boolean;
   login: (user: User) => void;
   logout: () => Promise<void>;
+  addTrackingToHistory: (trackingCode: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,8 +71,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const addTrackingToHistory = async (trackingCode: string) => {
+    if (!user || !user.email) return;
+    try {
+      const userRef = doc(db, "users", user.email);
+      // Use setDoc with merge: true to create the document if it doesn't exist
+      await setDoc(userRef, {
+        history_tracking: arrayUnion(trackingCode),
+        email: user.email,
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+    } catch (error) {
+      console.error("Error adding tracking to history:", error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, addTrackingToHistory }}>
       {children}
     </AuthContext.Provider>
   );
