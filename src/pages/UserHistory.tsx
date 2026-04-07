@@ -96,11 +96,13 @@ export default function UserHistory() {
             </div>
             <div>
               <h1 className="font-headline text-4xl font-black tracking-tight text-on-surface">Lịch sử tra cứu</h1>
-              <p className="mt-1 text-xs font-bold uppercase tracking-widest opacity-40">My Tracking History / 我的历史</p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-widest opacity-40">My Tracking History / 查询历史</p>
             </div>
           </div>
           <p className="mt-4 text-sm font-medium text-on-surface-variant/60">
             Lưu trữ các mã vận đơn bạn đã tra cứu trong 30 ngày qua.
+            <br />
+            <span className="text-xs opacity-60">保存您在过去 30 天内查询过的运单号。</span>
           </p>
         </div>
 
@@ -108,7 +110,7 @@ export default function UserHistory() {
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant/40" />
           <input
             type="text"
-            placeholder="Tìm kiếm trong lịch sử..."
+            placeholder="Tìm kiếm trong lịch sử... / 在历史记录中搜索..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full rounded-full border-none bg-surface-container-low py-3 pl-12 pr-4 text-sm focus:ring-2 focus:ring-primary"
@@ -128,10 +130,17 @@ export default function UserHistory() {
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-surface-container shadow-inner">
             <Package className="h-10 w-10 text-on-surface-variant/20" />
           </div>
-          <h3 className="font-headline text-2xl font-bold text-on-surface">Chưa có lịch sử tra cứu</h3>
-          <p className="mt-2 text-sm text-on-surface-variant/60">Bắt đầu tra cứu mã vận đơn để lưu lại lịch sử tại đây.</p>
+          <h3 className="font-headline text-2xl font-bold text-on-surface">
+            Chưa có lịch sử tra cứu
+            <span className="block text-lg opacity-60">暂无查询历史</span>
+          </h3>
+          <p className="mt-2 text-sm text-on-surface-variant/60">
+            Bắt đầu tra cứu mã vận đơn để lưu lại lịch sử tại đây.
+            <br />
+            开始查询运单号以在此保存历史记录。
+          </p>
           <Link to="/" className="mt-8 rounded-full bg-on-background px-8 py-3 text-sm font-bold text-white shadow-lg transition-all hover:opacity-90 active:scale-95">
-            Tra cứu ngay
+            Tra cứu ngay / 立即查询
           </Link>
         </div>
       ) : (
@@ -166,10 +175,13 @@ export default function UserHistory() {
                 </div>
                 <Link
                   to={`/tracking/${item.tracking_code}`}
-                  className="flex items-center gap-1 text-xs font-bold text-primary transition-all group-hover:translate-x-1"
+                  className="flex flex-col items-end gap-1 text-xs font-bold text-primary transition-all group-hover:translate-x-1"
                 >
-                  <span>Xem chi tiết</span>
-                  <ChevronRight className="h-4 w-4" />
+                  <div className="flex items-center gap-1">
+                    <span>Xem chi tiết</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </div>
+                  <span className="text-[9px] opacity-60">查看详情</span>
                 </Link>
               </div>
             </div>

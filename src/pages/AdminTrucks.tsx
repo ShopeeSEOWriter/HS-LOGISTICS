@@ -13,7 +13,7 @@ import BulkUpdateModal from "../components/BulkUpdateModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import MessageModal from "../components/MessageModal";
 
-import { getShippingSettings, updateShippingSettings, ShippingSettings } from "../services/settingsService";
+import { getShippingSettings, updateShippingSettings, ShippingSettings, RateEntry, PRODUCT_CATEGORIES } from "../services/settingsService";
 
 export default function AdminTrucks() {
   const [trucks, setTrucks] = useState<any[]>([]);
@@ -30,14 +30,9 @@ export default function AdminTrucks() {
   });
   const [newTruckCode, setNewTruckCode] = useState("");
   const [newTruckDestination, setNewTruckDestination] = useState("Hà Nội");
-  const [bulkUpdateStatus, setBulkUpdateStatus] = useState<{ label: string, location: string } | null>(null);
+  const [bulkUpdateStatus, setBulkUpdateStatus] = useState<{ label: string, location: string, value?: string } | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [settings, setSettings] = useState<ShippingSettings>({
-    hanoi: { price_per_kg: 25000, price_per_m3: 3500000 },
-    saigon: { price_per_kg: 30000, price_per_m3: 4500000 },
-    min_weight: 1,
-    volume_factor: 300
-  });
+  const [settings, setSettings] = useState<ShippingSettings | null>(null);
 
   // Calculator state
   const [calc, setCalc] = useState({ l: 0, w: 0, h: 0, price: 0 });
@@ -56,6 +51,7 @@ export default function AdminTrucks() {
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!settings) return;
     try {
       await updateShippingSettings(settings);
       setShowSettings(false);
@@ -76,6 +72,21 @@ export default function AdminTrucks() {
     }
   };
 
+  const updateRate = (categoryKey: string, field: keyof RateEntry, value: number) => {
+    if (!settings) return;
+    const currentRate = settings.rates[categoryKey] || { hn_kg: 0, hn_m3: 0, sg_kg: 0, sg_m3: 0 };
+    setSettings({
+      ...settings,
+      rates: {
+        ...settings.rates,
+        [categoryKey]: {
+          ...currentRate,
+          [field]: value
+        }
+      }
+    });
+  };
+
   const STATUS_FILTERS = [
     "Tất cả",
     "Đã nhận tại kho Trung Quốc",
@@ -83,8 +94,10 @@ export default function AdminTrucks() {
     "Đã xuất kho Trung Quốc",
     "Đang vận chuyển ra biên giới",
     "Đang làm thủ tục hải quan",
+    "Đang kiểm hoá tại cửa khẩu",
     "Đã thông quan",
     "Đã về đến Việt Nam",
+    "Đang vận chuyển về Hà Nội",
     "Đã về kho Hà Nội",
     "Đang phân loại tại kho",
     "Đang giao hàng",
@@ -92,17 +105,19 @@ export default function AdminTrucks() {
   ];
 
   const BULK_STATUS_OPTIONS = [
-    { label: "Đã nhận tại kho Trung Quốc", subLabel: "已入中国仓", location: "Kho Trung Quốc", color: "bg-blue-400" },
-    { label: "Đã bốc hàng lên xe", subLabel: "已装车", location: "Kho Trung Quốc", color: "bg-blue-500" },
-    { label: "Đã xuất kho Trung Quốc", subLabel: "已从中国发货", location: "Kho Trung Quốc", color: "bg-blue-600" },
-    { label: "Đang vận chuyển ra biên giới", subLabel: "前往边境中", location: "Trung Quốc", color: "bg-amber-400" },
-    { label: "Đang làm thủ tục hải quan", subLabel: "海关清关中", location: "Biên giới", color: "bg-amber-500" },
-    { label: "Đã thông quan", subLabel: "已完成清关", location: "Biên giới", color: "bg-emerald-400" },
-    { label: "Đã về đến Việt Nam", subLabel: "已入越南境", location: "Việt Nam", color: "bg-emerald-500" },
-    { label: "Đã về kho Hà Nội", subLabel: "已到河内仓", location: "Hà Nội", color: "bg-indigo-500" },
-    { label: "Đang phân loại tại kho", subLabel: "仓库分拣中", location: "Hà Nội", color: "bg-indigo-600" },
-    { label: "Đang giao hàng", subLabel: "派送中", location: "Nội địa VN", color: "bg-purple-500" },
-    { label: "Đã giao hàng", subLabel: "已送达", location: "Người nhận", color: "bg-green-500" },
+    { label: "Đã nhận tại kho Trung Quốc", subLabel: "已入中国仓", value: "Received at China warehouse", location: "Kho Trung Quốc", color: "bg-blue-400" },
+    { label: "Đã bốc hàng lên xe", subLabel: "已装车", value: "Packed into truck/container", location: "Kho Trung Quốc", color: "bg-blue-500" },
+    { label: "Đã xuất kho Trung Quốc", subLabel: "已从中国发货", value: "Departed China", location: "Kho Trung Quốc", color: "bg-blue-600" },
+    { label: "Đang vận chuyển ra biên giới", subLabel: "前往边境中", value: "Đang vận chuyển ra biên giới", location: "Trung Quốc", color: "bg-amber-400" },
+    { label: "Đang làm thủ tục hải quan", subLabel: "海关清关中", value: "Đang làm thủ tục hải quan", location: "Biên giới", color: "bg-amber-500" },
+    { label: "HÀNG KIỂM HOÁ (CUSTOMS CHECK)", subLabel: "海关查验中", value: "Đang kiểm hoá tại cửa khẩu", location: "Biên giới", color: "bg-orange-600" },
+    { label: "Đã thông quan", subLabel: "已完成清关", value: "Customs clearance", location: "Biên giới", color: "bg-emerald-400" },
+    { label: "Đã về đến Việt Nam", subLabel: "已入越南境", value: "Arrived Vietnam", location: "Việt Nam", color: "bg-emerald-500" },
+    { label: "Đang vận chuyển về Hà Nội", subLabel: "前往河内中", value: "Đang vận chuyển về Hà Nội", location: "Việt Nam", color: "bg-emerald-600" },
+    { label: "Đã về kho Hà Nội", subLabel: "已到河内仓", value: "Arrived Hanoi warehouse", location: "Hà Nội", color: "bg-indigo-500" },
+    { label: "Đang phân loại tại kho", subLabel: "仓库分拣中", value: "Đang phân loại tại kho", location: "Hà Nội", color: "bg-indigo-600" },
+    { label: "Đang giao hàng", subLabel: "派送中", value: "Out for delivery", location: "Nội địa VN", color: "bg-purple-500" },
+    { label: "Đã giao hàng", subLabel: "已送达", value: "Delivered", location: "Người nhận", color: "bg-green-500" },
   ];
 
   useEffect(() => {
@@ -362,160 +377,152 @@ export default function AdminTrucks() {
               </div>
 
               <form onSubmit={handleSaveSettings} className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Hanoi Table */}
-                  <div className="space-y-6 rounded-2xl bg-surface-container-low p-6 border border-primary/10">
-                    <div className="flex items-center gap-2 border-b border-surface-container pb-4">
-                      <MapPin className="h-5 w-5 text-primary" />
-                      <h4 className="font-bold">Bảng giá Hà Nội</h4>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Đơn giá mỗi kg (VND)</label>
-                        <input 
-                          type="number"
-                          required
-                          value={settings.hanoi.price_per_kg}
-                          onChange={(e) => setSettings({...settings, hanoi: {...settings.hanoi, price_per_kg: parseInt(e.target.value)}})}
-                          className="w-full rounded-xl border-none bg-surface-container-lowest p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
-                        />
+                {settings && (
+                  <>
+                    <div className="rounded-2xl bg-surface-container-low p-6 border border-surface-container overflow-hidden">
+                      <div className="mb-6 flex items-center gap-3">
+                        <Scale className="h-5 w-5 text-primary" />
+                        <h4 className="font-bold">Bảng giá danh mục hàng hóa</h4>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Đơn giá mỗi m³ (VND)</label>
-                        <input 
-                          type="number"
-                          required
-                          value={settings.hanoi.price_per_m3}
-                          onChange={(e) => setSettings({...settings, hanoi: {...settings.hanoi, price_per_m3: parseInt(e.target.value)}})}
-                          className="w-full rounded-xl border-none bg-surface-container-lowest p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Saigon Table */}
-                  <div className="space-y-6 rounded-2xl bg-surface-container-low p-6 border border-secondary/10">
-                    <div className="flex items-center gap-2 border-b border-surface-container pb-4">
-                      <MapPin className="h-5 w-5 text-secondary" />
-                      <h4 className="font-bold">Bảng giá Sài Gòn</h4>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Đơn giá mỗi kg (VND)</label>
-                        <input 
-                          type="number"
-                          required
-                          value={settings.saigon.price_per_kg}
-                          onChange={(e) => setSettings({...settings, saigon: {...settings.saigon, price_per_kg: parseInt(e.target.value)}})}
-                          className="w-full rounded-xl border-none bg-surface-container-lowest p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Đơn giá mỗi m³ (VND)</label>
-                        <input 
-                          type="number"
-                          required
-                          value={settings.saigon.price_per_m3}
-                          onChange={(e) => setSettings({...settings, saigon: {...settings.saigon, price_per_m3: parseInt(e.target.value)}})}
-                          className="w-full rounded-xl border-none bg-surface-container-lowest p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* General Settings */}
-                  <div className="space-y-6 rounded-2xl bg-surface-container-low p-6">
-                    <h4 className="font-bold border-b border-surface-container pb-4">Cấu hình chung</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Min Weight (kg)</label>
-                        <input 
-                          type="number"
-                          required
-                          value={settings.min_weight}
-                          onChange={(e) => setSettings({...settings, min_weight: parseFloat(e.target.value)})}
-                          className="w-full rounded-xl border-none bg-surface-container-lowest p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Vol Factor (kg/m³)</label>
-                        <input 
-                          type="number"
-                          required
-                          value={settings.volume_factor}
-                          onChange={(e) => setSettings({...settings, volume_factor: parseInt(e.target.value)})}
-                          className="w-full rounded-xl border-none bg-surface-container-lowest p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Volume Calculator */}
-                  <div className="space-y-6 rounded-2xl bg-surface-container-low p-6 border-2 border-dashed border-primary/20">
-                    <div className="flex items-center justify-between border-b border-surface-container pb-4">
-                      <h4 className="font-bold">Công cụ tính m³</h4>
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-primary">
-                        <Boxes className="h-3 w-3" />
-                        CALCULATOR
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold uppercase text-on-surface-variant/60">Dài (cm)</label>
-                        <input 
-                          type="number"
-                          value={calc.l}
-                          onChange={(e) => setCalc({...calc, l: parseFloat(e.target.value)})}
-                          className="w-full rounded-lg border-none bg-surface-container-lowest p-2 text-xs font-bold"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold uppercase text-on-surface-variant/60">Rộng (cm)</label>
-                        <input 
-                          type="number"
-                          value={calc.w}
-                          onChange={(e) => setCalc({...calc, w: parseFloat(e.target.value)})}
-                          className="w-full rounded-lg border-none bg-surface-container-lowest p-2 text-xs font-bold"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold uppercase text-on-surface-variant/60">Cao (cm)</label>
-                        <input 
-                          type="number"
-                          value={calc.h}
-                          onChange={(e) => setCalc({...calc, h: parseFloat(e.target.value)})}
-                          className="w-full rounded-lg border-none bg-surface-container-lowest p-2 text-xs font-bold"
-                        />
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-separate border-spacing-y-2">
+                          <thead>
+                            <tr className="text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/40">
+                              <th className="px-3 py-2 min-w-[150px]">Loại hàng</th>
+                              <th className="px-3 py-2 text-center bg-primary/5 rounded-t-lg">HN (KG)</th>
+                              <th className="px-3 py-2 text-center bg-primary/5">HN (M3)</th>
+                              <th className="px-3 py-2 text-center bg-secondary/5 rounded-t-lg">SG (KG)</th>
+                              <th className="px-3 py-2 text-center bg-secondary/5">SG (M3)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {PRODUCT_CATEGORIES.map((cat) => (
+                              <tr key={cat.id} className="bg-surface-container-lowest rounded-lg">
+                                <td className="px-3 py-3 text-xs font-bold text-on-surface">
+                                  {cat.label}
+                                </td>
+                                <td className="px-3 py-3 bg-primary/5">
+                                  <input
+                                    type="number"
+                                    value={settings.rates[cat.id]?.hn_kg || 0}
+                                    onChange={(e) => updateRate(cat.id, 'hn_kg', parseInt(e.target.value) || 0)}
+                                    className="w-full rounded-lg border-none bg-surface-container-low p-2 text-xs font-bold text-center"
+                                  />
+                                </td>
+                                <td className="px-3 py-3 bg-primary/5">
+                                  <input
+                                    type="number"
+                                    value={settings.rates[cat.id]?.hn_m3 || 0}
+                                    onChange={(e) => updateRate(cat.id, 'hn_m3', parseInt(e.target.value) || 0)}
+                                    className="w-full rounded-lg border-none bg-surface-container-low p-2 text-xs font-bold text-center"
+                                  />
+                                </td>
+                                <td className="px-3 py-3 bg-secondary/5">
+                                  <input
+                                    type="number"
+                                    value={settings.rates[cat.id]?.sg_kg || 0}
+                                    onChange={(e) => updateRate(cat.id, 'sg_kg', parseInt(e.target.value) || 0)}
+                                    className="w-full rounded-lg border-none bg-surface-container-low p-2 text-xs font-bold text-center"
+                                  />
+                                </td>
+                                <td className="px-3 py-3 bg-secondary/5">
+                                  <input
+                                    type="number"
+                                    value={settings.rates[cat.id]?.sg_m3 || 0}
+                                    onChange={(e) => updateRate(cat.id, 'sg_m3', parseInt(e.target.value) || 0)}
+                                    className="w-full rounded-lg border-none bg-surface-container-low p-2 text-xs font-bold text-center"
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-bold uppercase text-on-surface-variant/60">Đơn giá áp dụng (VND/m³)</label>
-                      <input 
-                        type="number"
-                        value={calc.price}
-                        onChange={(e) => setCalc({...calc, price: parseInt(e.target.value)})}
-                        className="w-full rounded-lg border-none bg-surface-container-lowest p-2 text-xs font-bold"
-                      />
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* General Settings */}
+                      <div className="space-y-6 rounded-2xl bg-surface-container-low p-6">
+                        <h4 className="font-bold border-b border-surface-container pb-4">Cấu hình chung</h4>
+                        <div className="grid grid-cols-1 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Vol Factor (kg/m³)</label>
+                            <input 
+                              type="number"
+                              required
+                              value={settings.volume_factor}
+                              onChange={(e) => setSettings({...settings, volume_factor: parseInt(e.target.value)})}
+                              className="w-full rounded-xl border-none bg-surface-container-lowest p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
+                            />
+                          </div>
+                        </div>
+                      </div>
 
-                    <div className="flex items-center justify-between rounded-xl bg-primary/5 p-4">
-                      <div>
-                        <p className="text-[9px] font-bold uppercase text-primary/60">Kết quả</p>
-                        <p className="text-sm font-black text-primary">{calculatedVolume.toFixed(4)} m³</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[9px] font-bold uppercase text-primary/60">Thành tiền</p>
-                        <p className="text-sm font-black text-primary">{new Intl.NumberFormat('vi-VN').format(calculatedPrice)} đ</p>
+                      {/* Volume Calculator */}
+                      <div className="space-y-6 rounded-2xl bg-surface-container-low p-6 border-2 border-dashed border-primary/20">
+                        <div className="flex items-center justify-between border-b border-surface-container pb-4">
+                          <h4 className="font-bold">Công cụ tính m³</h4>
+                          <div className="flex items-center gap-1 text-[10px] font-bold text-primary">
+                            <Boxes className="h-3 w-3" />
+                            CALCULATOR
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold uppercase text-on-surface-variant/60">Dài (cm)</label>
+                            <input 
+                              type="number"
+                              value={calc.l}
+                              onChange={(e) => setCalc({...calc, l: parseFloat(e.target.value)})}
+                              className="w-full rounded-lg border-none bg-surface-container-lowest p-2 text-xs font-bold"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold uppercase text-on-surface-variant/60">Rộng (cm)</label>
+                            <input 
+                              type="number"
+                              value={calc.w}
+                              onChange={(e) => setCalc({...calc, w: parseFloat(e.target.value)})}
+                              className="w-full rounded-lg border-none bg-surface-container-lowest p-2 text-xs font-bold"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold uppercase text-on-surface-variant/60">Cao (cm)</label>
+                            <input 
+                              type="number"
+                              value={calc.h}
+                              onChange={(e) => setCalc({...calc, h: parseFloat(e.target.value)})}
+                              className="w-full rounded-lg border-none bg-surface-container-lowest p-2 text-xs font-bold"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-bold uppercase text-on-surface-variant/60">Đơn giá áp dụng (VND/m³)</label>
+                          <input 
+                            type="number"
+                            value={calc.price}
+                            onChange={(e) => setCalc({...calc, price: parseInt(e.target.value)})}
+                            className="w-full rounded-lg border-none bg-surface-container-lowest p-2 text-xs font-bold"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-xl bg-primary/5 p-4">
+                          <div>
+                            <p className="text-[9px] font-bold uppercase text-primary/60">Kết quả</p>
+                            <p className="text-sm font-black text-primary">{calculatedVolume.toFixed(4)} m³</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[9px] font-bold uppercase text-primary/60">Thành tiền</p>
+                            <p className="text-sm font-black text-primary">{new Intl.NumberFormat('vi-VN').format(calculatedPrice)} đ</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
 
                 <div className="flex gap-4">
                   <button 
@@ -699,7 +706,7 @@ export default function AdminTrucks() {
       
       {bulkUpdateStatus && (
         <BulkUpdateModal 
-          status={bulkUpdateStatus.label}
+          status={bulkUpdateStatus.value || bulkUpdateStatus.label}
           location={bulkUpdateStatus.location}
           onClose={() => setBulkUpdateStatus(null)}
           onSuccess={(count) => {

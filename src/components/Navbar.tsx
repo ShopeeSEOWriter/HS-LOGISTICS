@@ -89,6 +89,10 @@ export default function Navbar() {
                 <span>Lịch sử</span>
                 <span className="text-[10px] opacity-70">历史</span>
               </NavLink>
+              <NavLink to="/calculator" active={location.pathname === "/calculator"}>
+                <span>Tính giá</span>
+                <span className="text-[10px] opacity-70">运费计算</span>
+              </NavLink>
               <NavLink to="/support" active={location.pathname === "/support"}>
                 <span>Hỗ trợ</span>
                 <span className="text-[10px] opacity-70">帮助</span>
@@ -139,12 +143,22 @@ export default function Navbar() {
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-3 focus:outline-none"
                 >
-                  <div className="hidden text-right md:block">
-                    <div className="text-xs font-bold text-on-surface">{user.email}</div>
-                    <div className="text-[9px] uppercase tracking-tighter text-on-surface-variant">
-                      {user.role === "admin" ? "Quản trị viên" : "Thành viên"}
-                    </div>
+                <div className="hidden text-right md:block">
+                  <div className="text-xs font-bold text-on-surface">{user.email}</div>
+                  <div className="text-[9px] uppercase tracking-tighter text-on-surface-variant">
+                    {user.role === "admin" ? (
+                      <>
+                        <span>Quản trị viên</span>
+                        <span className="ml-1 opacity-60">管理员</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Thành viên</span>
+                        <span className="ml-1 opacity-60">会员</span>
+                      </>
+                    )}
                   </div>
+                </div>
                   <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-primary/10 bg-primary/5 flex items-center justify-center">
                     <User className="h-6 w-6 text-primary" />
                   </div>
@@ -159,7 +173,10 @@ export default function Navbar() {
                         className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all"
                       >
                         <HistoryIcon className="h-4 w-4" />
-                        <span>Lịch sử tra cứu</span>
+                        <div className="flex flex-col">
+                          <span>Lịch sử tra cứu</span>
+                          <span className="text-[10px] opacity-60">查询历史</span>
+                        </div>
                       </Link>
                       <button 
                         onClick={() => {
@@ -169,7 +186,10 @@ export default function Navbar() {
                         className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-error hover:bg-error/10 transition-all"
                       >
                         <LogOut className="h-4 w-4" />
-                        <span>Đăng xuất</span>
+                        <div className="flex flex-col items-start">
+                          <span>Đăng xuất</span>
+                          <span className="text-[10px] opacity-60">退出登录</span>
+                        </div>
                       </button>
                     </div>
                   </div>
@@ -178,9 +198,10 @@ export default function Navbar() {
             ) : (
               <Link 
                 to="/auth" 
-                className="rounded-full bg-orange-500 px-6 py-2 text-xs font-bold text-black shadow-lg transition-all hover:bg-orange-600 active:scale-95"
+                className="flex flex-col items-center rounded-full bg-orange-500 px-6 py-2 text-xs font-bold text-black shadow-lg transition-all hover:bg-orange-600 active:scale-95"
               >
-                Đăng nhập
+                <span>Đăng nhập</span>
+                <span className="text-[9px] opacity-70">登录</span>
               </Link>
             )}
           </div>

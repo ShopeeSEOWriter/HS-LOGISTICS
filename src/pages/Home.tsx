@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, Truck, ShieldCheck, Map, ArrowRight, ShoppingBag, Store, ShoppingCart, Clock, ChevronRight } from "lucide-react";
+import { Package, Truck, ShieldCheck, Map, ArrowRight, ShoppingBag, Store, ShoppingCart, Clock, ChevronRight, Calculator } from "lucide-react";
 import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/src/lib/utils";
@@ -133,6 +133,15 @@ export default function Home() {
             <QuickLink icon={<ShoppingBag className="h-3 w-3" />} label="Taobao" />
             <QuickLink icon={<Store className="h-3 w-3" />} label="Shopee" />
             <QuickLink icon={<ShoppingCart className="h-3 w-3" />} label="Lazada" />
+            <Link 
+              to="/calculator" 
+              className="flex items-center gap-2 font-bold text-primary transition-all hover:scale-105"
+            >
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
+                <Calculator className="h-3 w-3" />
+              </div>
+              Tính giá cước / 运费计算
+            </Link>
           </div>
         </div>
 

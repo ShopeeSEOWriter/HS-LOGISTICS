@@ -22,7 +22,7 @@ const STATUS_OPTIONS = [
   { label: "Đã giao hàng", subLabel: "已送达", location: "Người nhận", color: "bg-green-500" },
 ];
 
-import { getShippingSettings, calculateShippingFee } from "../services/settingsService";
+import { getShippingSettings, updateShippingSettings, ShippingSettings, PRODUCT_CATEGORIES, RateEntry, calculateShippingFee } from "../services/settingsService";
 import MessageModal from "../components/MessageModal";
 
 export default function AdminTruckDetail() {
@@ -239,7 +239,7 @@ export default function AdminTruckDetail() {
       const volume = parseFloat(editForm.volume) || 0;
       const destination = mapDestination(editForm.destination);
       
-      const { totalCost, pricePerKg, pricePerM3 } = calculateShippingFee(weight, volume, settings, destination);
+      const { totalCost, pricePerKg, pricePerM3 } = calculateShippingFee(weight, volume, editForm.item_type || PRODUCT_CATEGORIES[0].id, settings, destination);
 
       const orderRef = doc(db, "orders", editingOrder.id);
       await updateDoc(orderRef, {
@@ -425,7 +425,9 @@ export default function AdminTruckDetail() {
                       <tr key={order.id} className="transition-colors hover:bg-surface-bright">
                         <td className="px-8 py-6">
                           <div className="font-bold text-primary">{order.tracking_code}</div>
-                          <div className="text-[10px] font-medium text-on-surface-variant/60">{order.item_type}</div>
+                          <div className="text-[10px] font-medium text-on-surface-variant/60">
+                            {PRODUCT_CATEGORIES.find(c => c.id === order.item_type)?.label || order.item_type}
+                          </div>
                         </td>
                         <td className="px-8 py-6">
                           <div className="text-xs font-bold">{order.destination}</div>
@@ -661,12 +663,16 @@ export default function AdminTruckDetail() {
 
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Mặt hàng / 货物类型</label>
-                <input 
-                  type="text"
+                <select 
                   value={editForm.item_type}
                   onChange={(e) => setEditForm({...editForm, item_type: e.target.value})}
-                  className="w-full rounded-xl border-none bg-surface-container-low p-4 text-sm font-medium focus:ring-2 focus:ring-primary"
-                />
+                  className="w-full rounded-xl border-none bg-surface-container-low p-4 text-sm font-bold focus:ring-2 focus:ring-primary appearance-none"
+                >
+                  <option value="">Chọn loại hàng</option>
+                  {PRODUCT_CATEGORIES.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex gap-4 pt-4">

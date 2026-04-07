@@ -17,7 +17,7 @@ interface PreviewRow {
   [key: string]: any;
 }
 
-import { getShippingSettings, calculateShippingFee } from "../services/settingsService";
+import { getShippingSettings, calculateShippingFee, PRODUCT_CATEGORIES } from "../services/settingsService";
 
 export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -76,6 +76,7 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
         const volumeKey = findKey(["Volume", "Thể tích", "Khối", "M3"]) || "";
         const destinationKey = findKey(["NOI DEN", "Destination", "Nơi đến", "Địa chỉ", "NOI_DEN"]) || "";
         const itemTypeKey = findKey(["Item Type", "Mặt hàng", "Loại hàng"]) || "";
+        const noteKey = findKey(["GHI CHU", "Note", "Ghi chú", "Lưu ý"]);
 
         if (!trackingKey) {
           setError("Không tìm thấy cột 'Mã vận đơn', 'Tracking Code', 'Mã số', 'Mã kiện' hoặc 'Mã hàng'.");
@@ -85,6 +86,24 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
         const formattedData: PreviewRow[] = jsonData.map(row => {
           const rawDest = String(row[destinationKey] || "").trim();
           const destination = mapDestination(rawDest);
+          const rawNote = noteKey ? String(row[noteKey] || "").trim().toLowerCase() : "";
+          const rawItemType = String(row[itemTypeKey] || "").trim();
+          
+          // Map item type to ID
+          let categoryId = "pho_thong";
+          const matchedCategory = PRODUCT_CATEGORIES.find(c => 
+            c.label.toLowerCase().includes(rawItemType.toLowerCase()) || 
+            rawItemType.toLowerCase().includes(c.label.toLowerCase())
+          );
+          if (matchedCategory) categoryId = matchedCategory.id;
+
+          let status = "Đã bốc hàng lên xe";
+          let location = "Kho Trung Quốc";
+
+          if (rawNote.includes("kiem hoa") || rawNote.includes("kiểm hoá")) {
+            status = "Đang kiểm hoá tại cửa khẩu";
+            location = "Border Gate";
+          }
           
           return {
             // Normalize: Preserve hyphens and other characters, only remove spaces
@@ -93,7 +112,9 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
             weight: parseFloat(row[weightKey]) || 0,
             volume: parseFloat(row[volumeKey]) || 0,
             destination: destination,
-            item_type: String(row[itemTypeKey] || "Hàng hóa").trim(),
+            item_type: categoryId, // Store ID
+            status: status,
+            location: location,
             ...row
           };
         }).filter(row => row.tracking_code !== "");
@@ -156,15 +177,17 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
 
       // Group by truck and prepare orders
       for (const row of previewData) {
-        const { truck_code, tracking_code, weight, volume, destination, item_type } = row;
+        const { truck_code, tracking_code, weight, volume, destination, item_type, status, location } = row;
         trucksToUpdate.add(truck_code);
 
-        const { totalCost, pricePerKg, pricePerM3 } = calculateShippingFee(weight, volume, settings, destination);
+        const { totalCost, pricePerKg, pricePerM3 } = calculateShippingFee(weight, volume, item_type, settings, destination);
         const historyEntry = {
-          status: "Đã bốc hàng lên xe",
-          location: "Kho Trung Quốc",
+          status: status || "Đã bốc hàng lên xe",
+          location: location || "Kho Trung Quốc",
           timestamp: now,
-          note: `Hàng đã được bốc lên xe ${truck_code} (Nhập từ Excel)`
+          note: status === "Đang kiểm hoá tại cửa khẩu" 
+            ? `Hàng đang được kiểm hoá tại cửa khẩu (Nhập từ Excel)`
+            : `Hàng đã được bốc lên xe ${truck_code} (Nhập từ Excel)`
         };
 
         const orderRef = doc(db, "orders", tracking_code);
@@ -178,8 +201,8 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
           price_per_kg: pricePerKg,
           price_per_m3: pricePerM3,
           total_cost: totalCost,
-          status: "Đã bốc hàng lên xe",
-          location: "Kho Trung Quốc",
+          status: status || "Đã bốc hàng lên xe",
+          location: location || "Kho Trung Quốc",
           last_updated: serverTimestamp(),
           history: arrayUnion(historyEntry),
           details: row,
@@ -190,10 +213,12 @@ export default function ExcelUpload({ onSuccess }: ExcelUploadProps) {
         const logRef = doc(db, "tracking_logs", logId);
         batch.set(logRef, {
           tracking_code,
-          status: "Đã bốc hàng lên xe",
+          status: status || "Đã bốc hàng lên xe",
           timestamp: now,
-          location: "Kho Trung Quốc",
-          note: `Hàng đã được bốc lên xe ${truck_code} (Nhập từ Excel)`
+          location: location || "Kho Trung Quốc",
+          note: status === "Đang kiểm hoá tại cửa khẩu" 
+            ? `Hàng đang được kiểm hoá tại cửa khẩu (Nhập từ Excel)`
+            : `Hàng đã được bốc lên xe ${truck_code} (Nhập từ Excel)`
         });
       }
 

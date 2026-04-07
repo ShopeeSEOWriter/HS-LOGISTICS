@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, where, writeBatch, getDoc, setDoc } from "firebase/firestore";
 import { db, auth } from "../lib/firebase";
+import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 import * as XLSX from "xlsx";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
@@ -12,18 +13,24 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, mapDestination, safeFormatDate } from "../lib/utils";
+import AdminSettings from "../components/AdminSettings";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, PieChart, Pie, Legend 
 } from 'recharts';
+import { Settings } from "lucide-react";
 
 const STEPS = [
   "Order created",
   "Received at China warehouse",
   "Packed into truck/container",
   "Departed China",
+  "Đang vận chuyển ra biên giới",
+  "Đang làm thủ tục hải quan",
+  "Đang kiểm hoá tại cửa khẩu",
   "Customs clearance",
   "Arrived Vietnam",
+  "Đang vận chuyển về Hà Nội",
   "Arrived Hanoi warehouse",
   "Out for delivery",
   "Delivered"
@@ -34,8 +41,12 @@ const STATUS_COLORS: Record<string, string> = {
   "Received at China warehouse": "#fbbf24",
   "Packed into truck/container": "#f59e0b",
   "Departed China": "#ea580c",
+  "Đang vận chuyển ra biên giới": "#fcd34d",
+  "Đang làm thủ tục hải quan": "#f59e0b",
+  "Đang kiểm hoá tại cửa khẩu": "#f97316", // Dark Orange
   "Customs clearance": "#6366f1",
   "Arrived Vietnam": "#10b981",
+  "Đang vận chuyển về Hà Nội": "#34d399",
   "Arrived Hanoi warehouse": "#059669",
   "Out for delivery": "#8b5cf6",
   "Delivered": "#22c55e"
@@ -45,6 +56,7 @@ const TRUCK_ACTIONS = [
   { label: "Đã bốc hàng lên xe", status: "Packed into truck/container", location: "China Warehouse" },
   { label: "Đang làm thủ tục hải quan", status: "Customs clearance", location: "Border Gate" },
   { label: "Đã sang Việt Nam", status: "Arrived Vietnam", location: "Vietnam Border" },
+  { label: "Đang vận chuyển về Hà Nội", status: "Đang vận chuyển về Hà Nội", location: "Việt Nam" },
   { label: "Đã về kho Hà Nội", status: "Arrived Hanoi warehouse", location: "Hanoi Warehouse" },
   { label: "Đang giao hàng", status: "Out for delivery", location: "On Delivery Vehicle" },
   { label: "Đã giao hàng", status: "Delivered", location: "Customer Address" }
@@ -177,6 +189,7 @@ export default function AdminDashboard() {
           const truckKey = findKey(["Mã xe", "Truck Code", "Container", "Xe"]);
           const statusKey = findKey(["Trạng thái", "Status", "Tinh trang"]);
           const destinationKey = findKey(["NOI DEN", "Nơi đến", "Destination", "Địa chỉ", "NOI_DEN"]);
+          const noteKey = findKey(["GHI CHU", "Note", "Ghi chú", "Lưu ý"]);
 
           for (const row of jsonData) {
             const anyRow = row as any;
@@ -188,7 +201,18 @@ export default function AdminDashboard() {
             const trackingCode = rawTrackingCode.replace(/\s+/g, "");
             
             const truckCode = truckKey ? String(anyRow[truckKey] || "").trim() : "";
-            const status = statusKey ? String(anyRow[statusKey] || "Packed into truck/container").trim() : "Packed into truck/container";
+            const rawStatus = statusKey ? String(anyRow[statusKey] || "").trim() : "";
+            const rawNote = noteKey ? String(anyRow[noteKey] || "").trim().toLowerCase() : "";
+            
+            let status = rawStatus || "Packed into truck/container";
+            let location = anyRow["Vị trí"] || anyRow["Location"] || "China Warehouse";
+
+            // Detect "Kiem hoa" keyword
+            if (rawNote.includes("kiem hoa") || rawNote.includes("kiểm hoá")) {
+              status = "Đang kiểm hoá tại cửa khẩu";
+              location = "Border Gate";
+            }
+            
             const rawDestination = destinationKey ? String(anyRow[destinationKey] || "").trim() : "";
             const destination = rawDestination ? mapDestination(rawDestination) : null;
             
@@ -199,7 +223,7 @@ export default function AdminDashboard() {
               tracking_code: trackingCode,
               customer_name: anyRow["Tên khách hàng"] || anyRow["Customer Name"] || "Imported via Excel",
               status: status,
-              location: anyRow["Vị trí"] || anyRow["Location"] || "China Warehouse",
+              location: location,
               truck_code: truckCode || null,
               updated_at: now,
               created_at: serverTimestamp(),
@@ -298,7 +322,7 @@ export default function AdminDashboard() {
       setMessage({ type: "success", text: `Updated ${querySnapshot.size} orders in truck ${selectedTruck}.` });
       fetchData();
     } catch (err) {
-      console.error("Truck update error:", err);
+      handleFirestoreError(err, OperationType.WRITE, `trucks/${selectedTruck}/bulk_update`);
       setMessage({ type: "error", text: "Failed to update truck status." });
     } finally {
       setUploading(false);
@@ -350,6 +374,12 @@ export default function AdminDashboard() {
             active={activeTab === "trucks"} 
             onClick={() => setActiveTab("trucks")} 
           />
+          <SidebarItem 
+            icon={<Settings className="h-5 w-5" />} 
+            label="Settings" 
+            active={activeTab === "settings"} 
+            onClick={() => setActiveTab("settings")} 
+          />
         </nav>
 
         <div className="p-6 border-t border-slate-800">
@@ -369,7 +399,8 @@ export default function AdminDashboard() {
           <div>
             <h2 className="text-3xl font-black text-slate-900">
               {activeTab === "overview" ? "Dashboard Overview" : 
-               activeTab === "orders" ? "Manage Orders" : "Truck Management"}
+               activeTab === "orders" ? "Manage Orders" : 
+               activeTab === "trucks" ? "Truck Management" : "System Settings"}
             </h2>
             <p className="text-slate-500 font-medium">Welcome back, Administrator.</p>
           </div>
@@ -826,6 +857,10 @@ export default function AdminDashboard() {
               </AnimatePresence>
             </div>
           </div>
+        )}
+
+        {activeTab === "settings" && (
+          <AdminSettings />
         )}
       </main>
     </div>

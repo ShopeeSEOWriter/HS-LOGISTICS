@@ -14,6 +14,7 @@ import History from "./pages/History";
 import Support from "./pages/Support";
 import AdminTrucks from "./pages/AdminTrucks";
 import AdminTruckDetail from "./pages/AdminTruckDetail";
+import ShippingCalculator from "./pages/ShippingCalculator";
 import Auth from "./pages/Auth";
 import UserHistory from "./pages/UserHistory";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
@@ -50,6 +51,7 @@ function AppContent() {
           <Route path="/ops" element={<ProtectedRoute adminOnly><Dashboard /></ProtectedRoute>} />
           <Route path="/admin/trucks" element={<ProtectedRoute adminOnly><AdminTrucks /></ProtectedRoute>} />
           <Route path="/admin/trucks/:id" element={<ProtectedRoute adminOnly><AdminTruckDetail /></ProtectedRoute>} />
+          <Route path="/calculator" element={<ShippingCalculator />} />
           <Route path="/history" element={<ProtectedRoute><UserHistory /></ProtectedRoute>} />
           <Route path="/support" element={<Support />} />
           <Route path="/auth" element={<Auth />} />

@@ -16,8 +16,10 @@ const STATUS_STEPS = [
   "Đã xuất kho Trung Quốc",
   "Đang vận chuyển ra biên giới",
   "Đang làm thủ tục hải quan",
+  "Đang kiểm hoá tại cửa khẩu",
   "Đã thông quan",
   "Đã về đến Việt Nam",
+  "Đang vận chuyển về Hà Nội",
   "Đã về kho Hà Nội",
   "Đang phân loại tại kho",
   "Đang giao hàng",
@@ -30,9 +32,11 @@ const STATUS_CHINESE: Record<string, string> = {
   "Đã bốc hàng lên xe": "已装车",
   "Đã xuất kho Trung Quốc": "已从中国发货",
   "Đang vận chuyển ra biên giới": "前往边境中",
+  "Đang kiểm hoá tại cửa khẩu": "海关查验中",
   "Đang làm thủ tục hải quan": "海关清关中",
   "Đã thông quan": "已完成清关",
   "Đã về đến Việt Nam": "已入越南境",
+  "Đang vận chuyển về Hà Nội": "前往河内中",
   "Đã về kho Hà Nội": "已到河内仓",
   "Đang phân loại tại kho": "仓库分拣中",
   "Đang giao hàng": "派送中",
@@ -45,9 +49,11 @@ const STATUS_LOCATIONS: Record<string, string> = {
   "Đã bốc hàng lên xe": "Trung Quốc",
   "Đã xuất kho Trung Quốc": "Trung Quốc",
   "Đang vận chuyển ra biên giới": "Trung Quốc",
+  "Đang kiểm hoá tại cửa khẩu": "Biên giới",
   "Đang làm thủ tục hải quan": "Biên giới",
   "Đã thông quan": "Biên giới",
   "Đã về đến Việt Nam": "Việt Nam",
+  "Đang vận chuyển về Hà Nội": "Việt Nam",
   "Đã về kho Hà Nội": "Việt Nam",
   "Đang phân loại tại kho": "Việt Nam",
   "Đang giao hàng": "Việt Nam",
@@ -269,10 +275,17 @@ export default function TrackingDetail() {
         <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-error/10 text-error">
           <AlertCircle className="h-12 w-12" />
         </div>
-        <h1 className="font-headline text-4xl font-black">Không tìm thấy vận đơn</h1>
-        <p className="mt-4 text-on-surface-variant">Mã vận đơn {id} không tồn tại trong hệ thống của chúng tôi.</p>
+        <h1 className="font-headline text-4xl font-black">
+          Không tìm thấy vận đơn
+          <span className="block text-2xl opacity-60">未找到运单</span>
+        </h1>
+        <p className="mt-4 text-on-surface-variant">
+          Mã vận đơn {id} không tồn tại trong hệ thống của chúng tôi.
+          <br />
+          运单号 {id} 在我们的系统中不存在。
+        </p>
         <Link to="/" className="mt-12 rounded-full bg-on-background px-8 py-4 text-sm font-bold text-white shadow-xl">
-          Quay lại trang chủ
+          Quay lại trang chủ / 返回首页
         </Link>
       </main>
     );
@@ -330,16 +343,17 @@ export default function TrackingDetail() {
                 )}></span>
               </span>
               {order.status}
+              <span className="ml-2 text-[10px] opacity-60">{STATUS_CHINESE[order.status]}</span>
             </div>
             <div className="flex flex-col items-start gap-1 md:items-end">
               <p className={cn(
                 "text-xs font-bold uppercase tracking-tighter",
                 order.isDelayed ? "text-error" : "text-primary"
               )}>
-                Vị trí hiện tại: {STATUS_LOCATIONS[order.status] || "Đang cập nhật"}
+                Vị trí hiện tại / 当前位置: {STATUS_LOCATIONS[order.status] || "Đang cập nhật / 更新中"}
               </p>
               <p className="text-[10px] font-medium text-on-surface-variant">
-                Cập nhật lần cuối: {safeFormatDate(order.last_updated)}
+                Cập nhật lần cuối / 最后更新: {safeFormatDate(order.last_updated)}
               </p>
             </div>
           </div>
@@ -347,6 +361,25 @@ export default function TrackingDetail() {
       </div>
 
       {/* Bento Stats */}
+      {/* Customs Warning Banner */}
+      {order.status === "Đang kiểm hoá tại cửa khẩu" && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 flex items-start gap-4 rounded-3xl bg-orange-500/10 p-8 text-orange-600 border-2 border-orange-500/20 shadow-lg"
+        >
+          <AlertTriangle className="h-8 w-8 shrink-0 animate-pulse" />
+          <div className="space-y-2">
+            <h3 className="font-headline text-xl font-black uppercase tracking-tight">Thông báo kiểm hoá / 海关查验通知</h3>
+            <p className="text-sm font-bold leading-relaxed">
+              Thông báo: Kiện hàng đang được cơ quan Hải quan kiểm tra định kỳ. Thời gian thông quan có thể kéo dài thêm 1-3 ngày. Rất mong quý khách thông cảm.
+              <br />
+              <span className="text-xs opacity-70">通知：您的包裹目前正在接受海关例行检查。清关时间可能会延长1-3天。感谢您的理解。</span>
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       <div className="mb-16 grid grid-cols-1 gap-6 md:grid-cols-4">
         <div className="col-span-3 rounded-2xl border-l-4 border-primary-container bg-surface-container-lowest p-10 shadow-editorial">
           <div className="grid grid-cols-2 gap-12 md:grid-cols-4">
@@ -417,7 +450,7 @@ export default function TrackingDetail() {
             ))}
             
             {logs.length === 0 && (
-              <p className="text-sm font-medium text-on-surface-variant/60 italic">Chưa có dữ liệu hành trình.</p>
+              <p className="text-sm font-medium text-on-surface-variant/60 italic">Chưa có dữ liệu hành trình / 暂无行程数据。</p>
             )}
           </div>
         </div>
@@ -430,6 +463,25 @@ export default function TrackingDetail() {
               alt="Map"
               className="h-full w-full object-cover opacity-40 grayscale transition-opacity duration-700 group-hover:opacity-60"
             />
+
+            {/* Customs Check Map Icon */}
+            {order.status === "Đang kiểm hoá tại cửa khẩu" && (
+              <motion.div 
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
+              >
+                <div className="relative flex h-16 w-16 items-center justify-center">
+                  <div className="absolute inset-0 animate-ping rounded-full bg-red-500/30" />
+                  <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-red-600 text-white shadow-2xl">
+                    <AlertCircle className="h-6 w-6" />
+                  </div>
+                  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-red-600 px-3 py-1 text-[10px] font-bold text-white shadow-lg">
+                    KIỂM HOÁ / 查验中
+                  </div>
+                </div>
+              </motion.div>
+            )}
             
             <div className="absolute top-8 left-8 right-8 flex justify-between">
               <HubBadge label="Nguồn / 始发地" city="Đông Hưng / 东兴" />
@@ -489,7 +541,7 @@ export default function TrackingDetail() {
                   ))}
                   {truckOrders.length === 0 && (
                     <p className="col-span-2 text-center text-xs font-medium text-on-surface-variant/60 italic">
-                      Chưa có mã hàng trong xe này.
+                      Chưa có mã hàng trong xe này / 此车暂无运单。
                     </p>
                   )}
                 </div>

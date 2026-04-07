@@ -99,17 +99,37 @@ export default function Auth() {
       <div className="w-full max-w-md overflow-hidden rounded-[2.5rem] bg-surface-container-lowest shadow-editorial">
         <div className="bg-orange-600 p-12 text-center text-black">
           <h1 className="font-headline text-3xl font-black tracking-tight">
-            {isLogin ? "Chào mừng trở lại" : "Tạo tài khoản mới"}
+            {isLogin ? (
+              <>
+                <span>Chào mừng trở lại</span>
+                <span className="block text-xl opacity-60">欢迎回来</span>
+              </>
+            ) : (
+              <>
+                <span>Tạo tài khoản mới</span>
+                <span className="block text-xl opacity-60">创建新账户</span>
+              </>
+            )}
           </h1>
           <p className="mt-2 text-sm font-medium opacity-80">
-            {isLogin ? "Đăng nhập để quản lý lịch sử vận đơn" : "Đăng ký để bắt đầu theo dõi đơn hàng"}
+            {isLogin ? (
+              <>
+                <span>Đăng nhập để quản lý lịch sử vận đơn</span>
+                <span className="block text-xs opacity-60">登录以管理运单历史</span>
+              </>
+            ) : (
+              <>
+                <span>Đăng ký để bắt đầu theo dõi đơn hàng</span>
+                <span className="block text-xs opacity-60">注册以开始追踪订单</span>
+              </>
+            )}
           </p>
         </div>
 
         <div className="p-12">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Email</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Email / 电子邮件</label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-on-surface-variant/40" />
                 <input
@@ -124,7 +144,7 @@ export default function Auth() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Mật khẩu</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/60">Mật khẩu / 密码</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-on-surface-variant/40" />
                 <input
@@ -193,14 +213,19 @@ export default function Auth() {
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-orange-500 py-4 text-sm font-bold text-black shadow-xl shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-95 disabled:opacity-50"
+              className="flex w-full flex-col items-center justify-center gap-1 rounded-full bg-orange-500 py-3 text-sm font-bold text-black shadow-xl shadow-orange-500/20 transition-all hover:bg-orange-600 active:scale-95 disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
-                  <span>{isLogin ? "Đăng nhập" : "Đăng ký"}</span>
-                  <ArrowRight className="h-4 w-4" />
+                  <div className="flex items-center gap-2">
+                    <span>{isLogin ? "Đăng nhập" : "Đăng ký"}</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                  <span className="text-[10px] font-normal opacity-70">
+                    {isLogin ? "登录" : "注册"}
+                  </span>
                 </>
               )}
             </button>
@@ -212,7 +237,7 @@ export default function Auth() {
                   onClick={handleForgotPassword}
                   className="text-xs font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
                 >
-                  Quên mật khẩu?
+                  Quên mật khẩu? / 忘记密码？
                 </button>
               </div>
             )}
@@ -223,7 +248,17 @@ export default function Auth() {
               onClick={() => setIsLogin(!isLogin)}
               className="text-sm font-bold text-primary hover:underline"
             >
-              {isLogin ? "Chưa có tài khoản? Đăng ký ngay" : "Đã có tài khoản? Đăng nhập"}
+              {isLogin ? (
+                <>
+                  <span>Chưa có tài khoản? Đăng ký ngay</span>
+                  <span className="ml-2 opacity-60">没有账户？立即注册</span>
+                </>
+              ) : (
+                <>
+                  <span>Đã có tài khoản? Đăng nhập</span>
+                  <span className="ml-2 opacity-60">已有账户？登录</span>
+                </>
+              )}
             </button>
           </div>
         </div>

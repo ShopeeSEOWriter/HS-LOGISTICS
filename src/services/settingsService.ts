@@ -1,40 +1,53 @@
 import { db } from "../lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
-export interface DestinationSettings {
-  price_per_kg: number;
-  price_per_m3: number;
+export interface RateEntry {
+  hn_kg: number;
+  hn_m3: number;
+  sg_kg: number;
+  sg_m3: number;
 }
 
 export interface ShippingSettings {
-  hanoi: DestinationSettings;
-  saigon: DestinationSettings;
-  min_weight: number;
+  rates: {
+    [key: string]: RateEntry;
+  };
   volume_factor: number;
 }
 
-const SETTINGS_DOC_ID = "shipping";
+const SETTINGS_DOC_ID = "shipping_rates";
+const COLLECTION_NAME = "system_settings";
+
+export const PRODUCT_CATEGORIES = [
+  { id: "pho_thong", label: "Hàng phổ thông / 普通货物" },
+  { id: "my_pham", label: "Mỹ phẩm / Thực phẩm / 化妆品/食品" },
+  { id: "dien_tu", label: "Linh kiện / Điện tử / 电子产品/零件" },
+  { id: "hang_nang", label: "Hàng nặng / 重货" }
+];
+
+const DEFAULT_RATES: Record<string, RateEntry> = {
+  pho_thong: { hn_kg: 18000, hn_m3: 3000000, sg_kg: 22000, sg_m3: 4000000 },
+  my_pham: { hn_kg: 25000, hn_m3: 3500000, sg_kg: 30000, sg_m3: 4500000 },
+  dien_tu: { hn_kg: 35000, hn_m3: 4500000, sg_kg: 40000, sg_m3: 5500000 },
+  hang_nang: { hn_kg: 15000, hn_m3: 2500000, sg_kg: 18000, sg_m3: 3000000 }
+};
 
 const DEFAULT_SETTINGS: ShippingSettings = {
-  hanoi: {
-    price_per_kg: 25000,
-    price_per_m3: 3500000
-  },
-  saigon: {
-    price_per_kg: 30000,
-    price_per_m3: 4500000
-  },
-  min_weight: 1,
+  rates: DEFAULT_RATES,
   volume_factor: 300
 };
 
 export const getShippingSettings = async (): Promise<ShippingSettings> => {
   try {
-    const docRef = doc(db, "settings", SETTINGS_DOC_ID);
+    const docRef = doc(db, COLLECTION_NAME, SETTINGS_DOC_ID);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
-      return { ...DEFAULT_SETTINGS, ...docSnap.data() } as ShippingSettings;
+      const data = docSnap.data();
+      return {
+        volume_factor: data.volume_factor || 300,
+        rates: { ...DEFAULT_RATES, ...(data.rates || data) } // Support both nested and flat structure for migration
+      } as ShippingSettings;
     } else {
       return DEFAULT_SETTINGS;
     }
@@ -46,7 +59,7 @@ export const getShippingSettings = async (): Promise<ShippingSettings> => {
 
 export const updateShippingSettings = async (settings: ShippingSettings) => {
   try {
-    const docRef = doc(db, "settings", SETTINGS_DOC_ID);
+    const docRef = doc(db, COLLECTION_NAME, SETTINGS_DOC_ID);
     await setDoc(docRef, settings);
   } catch (error) {
     console.error("Error updating shipping settings:", error);
@@ -57,27 +70,52 @@ export const updateShippingSettings = async (settings: ShippingSettings) => {
 export const calculateShippingFee = (
   weight: number, 
   volume: number, 
-  settings: ShippingSettings,
+  categoryKey: string,
+  settings?: ShippingSettings | null,
   destination: string = "Hà Nội"
 ) => {
-  const isSaigon = destination.toLowerCase().includes("sài gòn") || destination.toLowerCase().includes("hồ chí minh");
-  const destSettings = isSaigon ? settings.saigon : settings.hanoi;
+  const activeSettings = settings || DEFAULT_SETTINGS;
+  const isSaigon = destination.toLowerCase().includes("sài gòn") || 
+                   destination.toLowerCase().includes("hồ chí minh") || 
+                   destination.toLowerCase().includes("hcm") || 
+                   destination.toLowerCase().includes("sg");
+                   
+  const rateEntry = activeSettings.rates[categoryKey] || DEFAULT_RATES[categoryKey] || DEFAULT_RATES.pho_thong;
+  const conversionFactor = activeSettings.volume_factor || 300;
 
-  // Option 1: Traditional chargeable weight based on volume factor
-  const volumeWeight = volume * settings.volume_factor;
-  const chargeableWeight = Math.max(weight, volumeWeight, settings.min_weight);
-  const costByWeight = chargeableWeight * destSettings.price_per_kg;
-
-  // Option 2: Direct volume pricing
-  const costByVolume = volume * destSettings.price_per_m3;
-
-  // Usually logistics take the higher of the two
-  const totalCost = Math.max(costByWeight, costByVolume);
+  // Cân nặng quy đổi = m3 * volume_factor
+  const convertedWeight = volume * conversionFactor;
   
+  let totalCost = 0;
+  let calculationMethod = "";
+  let appliedUnitPrice = 0;
+
+  const priceKg = isSaigon ? rateEntry.sg_kg : rateEntry.hn_kg;
+  const priceM3 = isSaigon ? rateEntry.sg_m3 : rateEntry.hn_m3;
+
+  // Nếu Cân nặng thực tế > Cân nặng quy đổi: Tính tiền theo KG.
+  // Nếu Cân nặng thực tế < Cân nặng quy đổi: Tính tiền theo M3.
+  if (weight >= convertedWeight) {
+    totalCost = weight * priceKg;
+    calculationMethod = "Cân nặng thực tế (KG)";
+    appliedUnitPrice = priceKg;
+  } else {
+    totalCost = volume * priceM3;
+    calculationMethod = "Thể tích (M3)";
+    appliedUnitPrice = priceM3;
+  }
+
+  const categoryLabel = PRODUCT_CATEGORIES.find(c => c.id === categoryKey)?.label || categoryKey;
+
   return {
-    chargeableWeight,
+    weight,
+    volume,
+    category: categoryLabel,
+    convertedWeight,
     totalCost,
-    pricePerKg: destSettings.price_per_kg,
-    pricePerM3: destSettings.price_per_m3
+    calculationMethod,
+    appliedUnitPrice,
+    pricePerKg: priceKg,
+    pricePerM3: priceM3
   };
 };
