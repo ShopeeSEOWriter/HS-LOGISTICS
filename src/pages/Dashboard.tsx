@@ -1,4 +1,4 @@
-import { LayoutDashboard, Truck, Boxes, Scale, Headset, PlusCircle, Search, Bell, HelpCircle, Upload, Edit, ChevronRight, CheckCircle, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, Truck, Boxes, Scale, Headset, PlusCircle, Search, Bell, HelpCircle, Upload, Edit, ChevronRight, CheckCircle, AlertTriangle, Languages } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { Link } from "react-router-dom";
 
@@ -21,7 +21,7 @@ export default function Dashboard() {
         <nav className="flex-1 space-y-1">
           <SidebarLink icon={<LayoutDashboard className="h-5 w-5" />} label="Bảng điều khiển" subLabel="仪表盘" active />
           <SidebarLink icon={<Truck className="h-5 w-5" />} label="Vận chuyển" subLabel="发货" />
-          <SidebarLink icon={<Boxes className="h-5 w-5" />} label="Kho hàng" subLabel="库存" />
+          <SidebarLink icon={<Boxes className="h-5 w-5" />} label="Dịch list xe" subLabel="翻译车单" to="/admin/translator" />
           <SidebarLink icon={<Scale className="h-5 w-5" />} label="Hải quan" subLabel="海关" />
           <SidebarLink icon={<Headset className="h-5 w-5" />} label="Hỗ trợ" subLabel="支持" />
           
@@ -77,6 +77,9 @@ export default function Dashboard() {
                 </p>
               </div>
               <div className="flex gap-3">
+                <Link to="/admin/translator">
+                  <TableAction icon={<Languages className="h-4 w-4" />} label="Dịch thuật Excel" subLabel="Excel 翻译" />
+                </Link>
                 <TableAction icon={<Upload className="h-4 w-4" />} label="Nhập từ Sheets" subLabel="从表格导入" />
                 <TableAction icon={<Edit className="h-4 w-4" />} label="Cập nhật hàng loạt" subLabel="批量更新" primary />
               </div>
@@ -150,9 +153,9 @@ export default function Dashboard() {
   );
 }
 
-function SidebarLink({ icon, label, subLabel, active }: any) {
+function SidebarLink({ icon, label, subLabel, active, to = "#" }: any) {
   return (
-    <a href="#" className={cn(
+    <Link to={to} className={cn(
       "ml-2 flex items-center gap-4 rounded-l-2xl px-6 py-4 transition-all",
       active ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:bg-surface-container"
     )}>
@@ -161,7 +164,7 @@ function SidebarLink({ icon, label, subLabel, active }: any) {
         <span className="text-sm font-bold leading-none">{label}</span>
         <span className="mt-1 text-[9px] font-bold uppercase tracking-tighter opacity-60">{subLabel}</span>
       </div>
-    </a>
+    </Link>
   );
 }
 

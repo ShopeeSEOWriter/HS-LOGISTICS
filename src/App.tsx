@@ -17,6 +17,7 @@ import AdminTruckDetail from "./pages/AdminTruckDetail";
 import ShippingCalculator from "./pages/ShippingCalculator";
 import Auth from "./pages/Auth";
 import UserHistory from "./pages/UserHistory";
+import GoodsTranslator from "./pages/GoodsTranslator";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { cn } from "./lib/utils";
 import { Navigate } from "react-router-dom";
@@ -55,6 +56,7 @@ function AppContent() {
           <Route path="/history" element={<ProtectedRoute><UserHistory /></ProtectedRoute>} />
           <Route path="/support" element={<Support />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/admin/translator" element={<ProtectedRoute adminOnly><GoodsTranslator /></ProtectedRoute>} />
         </Routes>
       </div>
       {!isOps && <Footer />}

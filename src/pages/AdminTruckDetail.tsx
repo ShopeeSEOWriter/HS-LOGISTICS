@@ -4,6 +4,7 @@ import { doc, onSnapshot, collection, query, where, getDocs, updateDoc, deleteDo
 import { db } from "../lib/firebase";
 import { Truck, Package, ChevronLeft, CheckCircle, Clock, AlertCircle, Loader2, MapPin, FileText, Trash2, Edit2 } from "lucide-react";
 import { cn, mapDestination, safeFormatDate } from "../lib/utils";
+import AdminSidebar from "../components/AdminSidebar";
 import { format } from "date-fns";
 import { useAuth } from "../hooks/useAuth";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
@@ -328,6 +329,7 @@ export default function AdminTruckDetail() {
 
   return (
     <div className="flex min-h-screen bg-surface">
+      <AdminSidebar />
       <main className="flex-1 p-12 pt-24">
         <div className="mb-8 flex items-center justify-between">
           <div className="flex items-center gap-6">

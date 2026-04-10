@@ -14,6 +14,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import AdminSettings from "../components/AdminSettings";
+import AdminSidebar from "../components/AdminSidebar";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, PieChart, Pie, Legend 
@@ -346,55 +347,10 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans">
-      {/* Sidebar */}
-      <aside className="w-72 bg-slate-900 text-white flex flex-col sticky top-0 h-screen">
-        <div className="p-8 flex items-center gap-3 border-b border-slate-800">
-          <div className="bg-primary p-2 rounded-lg">
-            <Truck className="h-6 w-6" />
-          </div>
-          <h1 className="text-xl font-black tracking-tight">ADMIN</h1>
-        </div>
-
-        <nav className="flex-1 p-6 space-y-2">
-          <SidebarItem 
-            icon={<LayoutDashboard className="h-5 w-5" />} 
-            label="Overview" 
-            active={activeTab === "overview"} 
-            onClick={() => setActiveTab("overview")} 
-          />
-          <SidebarItem 
-            icon={<Package className="h-5 w-5" />} 
-            label="Orders" 
-            active={activeTab === "orders"} 
-            onClick={() => setActiveTab("orders")} 
-          />
-          <SidebarItem 
-            icon={<Truck className="h-5 w-5" />} 
-            label="Trucks" 
-            active={activeTab === "trucks"} 
-            onClick={() => setActiveTab("trucks")} 
-          />
-          <SidebarItem 
-            icon={<Settings className="h-5 w-5" />} 
-            label="Settings" 
-            active={activeTab === "settings"} 
-            onClick={() => setActiveTab("settings")} 
-          />
-        </nav>
-
-        <div className="p-6 border-t border-slate-800">
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-3 text-slate-400 hover:text-white transition-colors font-bold text-sm w-full"
-          >
-            <LogOut className="h-5 w-5" />
-            Sign Out
-          </button>
-        </div>
-      </aside>
+      <AdminSidebar />
 
       {/* Main Content */}
-      <main className="flex-1 p-12 overflow-y-auto">
+      <main className="flex-1 p-12 overflow-y-auto ml-64">
         <header className="flex items-center justify-between mb-12">
           <div>
             <h2 className="text-3xl font-black text-slate-900">
@@ -864,21 +820,6 @@ export default function AdminDashboard() {
         )}
       </main>
     </div>
-  );
-}
-
-function SidebarItem({ icon, label, active, onClick }: any) {
-  return (
-    <button 
-      onClick={onClick}
-      className={cn(
-        "w-full flex items-center gap-4 px-6 py-4 rounded-xl font-bold text-sm transition-all",
-        active ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-slate-400 hover:text-white hover:bg-slate-800"
-      )}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }
 
