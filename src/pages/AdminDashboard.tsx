@@ -53,14 +53,30 @@ const STATUS_COLORS: Record<string, string> = {
   "Delivered": "#22c55e"
 };
 
+const STATUS_CN: Record<string, string> = {
+  "Order created": "订单已创建",
+  "Received at China warehouse": "已入中国仓",
+  "Packed into truck/container": "已装车",
+  "Departed China": "已从中国发货",
+  "Đang vận chuyển ra biên giới": "前往边境中",
+  "Đang làm thủ tục hải quan": "海关清关中",
+  "Đang kiểm hoá tại cửa khẩu": "海关查验中",
+  "Customs clearance": "已完成清关",
+  "Arrived Vietnam": "已入越南境",
+  "Đang vận chuyển về Hà Nội": "前往河内中",
+  "Arrived Hanoi warehouse": "已到河内仓",
+  "Out for delivery": "派送中",
+  "Delivered": "已送达"
+};
+
 const TRUCK_ACTIONS = [
-  { label: "Đã bốc hàng lên xe", status: "Packed into truck/container", location: "China Warehouse" },
-  { label: "Đang làm thủ tục hải quan", status: "Customs clearance", location: "Border Gate" },
-  { label: "Đã sang Việt Nam", status: "Arrived Vietnam", location: "Vietnam Border" },
-  { label: "Đang vận chuyển về Hà Nội", status: "Đang vận chuyển về Hà Nội", location: "Việt Nam" },
-  { label: "Đã về kho Hà Nội", status: "Arrived Hanoi warehouse", location: "Hanoi Warehouse" },
-  { label: "Đang giao hàng", status: "Out for delivery", location: "On Delivery Vehicle" },
-  { label: "Đã giao hàng", status: "Delivered", location: "Customer Address" }
+  { label: "Đã bốc hàng lên xe", subLabel: "已装车", status: "Packed into truck/container", location: "China Warehouse" },
+  { label: "Đang làm thủ tục hải quan", subLabel: "海关清关中", status: "Customs clearance", location: "Border Gate" },
+  { label: "Đã sang Việt Nam", subLabel: "已入越南境", status: "Arrived Vietnam", location: "Vietnam Border" },
+  { label: "Đang vận chuyển về Hà Nội", subLabel: "前往河内中", status: "Đang vận chuyển về Hà Nội", location: "Việt Nam" },
+  { label: "Đã về kho Hà Nội", subLabel: "已到河内仓", status: "Arrived Hanoi warehouse", location: "Hanoi Warehouse" },
+  { label: "Đang giao hàng", subLabel: "派送中", status: "Out for delivery", location: "On Delivery Vehicle" },
+  { label: "Đã giao hàng", subLabel: "已送达", status: "Delivered", location: "Customer Address" }
 ];
 
 export default function AdminDashboard() {
@@ -354,11 +370,11 @@ export default function AdminDashboard() {
         <header className="flex items-center justify-between mb-12">
           <div>
             <h2 className="text-3xl font-black text-slate-900">
-              {activeTab === "overview" ? "Dashboard Overview" : 
-               activeTab === "orders" ? "Manage Orders" : 
-               activeTab === "trucks" ? "Truck Management" : "System Settings"}
+              {activeTab === "overview" ? "Dashboard Overview / 仪表盘概览" : 
+               activeTab === "orders" ? "Manage Orders / 订单管理" : 
+               activeTab === "trucks" ? "Truck Management / 车辆管理" : "System Settings / 系统设置"}
             </h2>
-            <p className="text-slate-500 font-medium">Welcome back, Administrator.</p>
+            <p className="text-slate-500 font-medium">Welcome back, Administrator. / 欢迎回来，管理员。</p>
           </div>
 
           <div className="flex items-center gap-4">
@@ -371,10 +387,13 @@ export default function AdminDashboard() {
             <button 
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+              className="flex flex-col items-center bg-primary text-white px-6 py-2 rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
             >
-              <Upload className="h-5 w-5" />
-              {uploading ? "Processing..." : "Import Excel"}
+              <div className="flex items-center gap-2">
+                <Upload className="h-5 w-5" />
+                {uploading ? "Processing..." : "Import Excel"}
+              </div>
+              <span className="text-[10px] opacity-60">{uploading ? "处理中..." : "导入 Excel"}</span>
             </button>
             <input 
               type="file" 
@@ -407,11 +426,11 @@ export default function AdminDashboard() {
           <div className="space-y-12">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-              <StatCard label="Total Orders" value={stats.total} icon={<Package />} color="bg-blue-500" />
-              <StatCard label="In China" value={stats.china} icon={<MapPin />} color="bg-amber-500" />
-              <StatCard label="In Transit" value={stats.transit} icon={<Truck />} color="bg-indigo-500" />
-              <StatCard label="In Vietnam" value={stats.vietnam} icon={<MapPin />} color="bg-emerald-500" />
-              <StatCard label="Delivered" value={stats.delivered} icon={<CheckCircle2 />} color="bg-green-500" />
+              <StatCard label="Total Orders" subLabel="总订单" value={stats.total} icon={<Package />} color="bg-blue-500" />
+              <StatCard label="In China" subLabel="在中国" value={stats.china} icon={<MapPin />} color="bg-amber-500" />
+              <StatCard label="In Transit" subLabel="运输中" value={stats.transit} icon={<Truck />} color="bg-indigo-500" />
+              <StatCard label="In Vietnam" subLabel="在越南" value={stats.vietnam} icon={<MapPin />} color="bg-emerald-500" />
+              <StatCard label="Delivered" subLabel="已送达" value={stats.delivered} icon={<CheckCircle2 />} color="bg-green-500" />
             </div>
 
             {/* Charts Section */}
@@ -421,9 +440,9 @@ export default function AdminDashboard() {
                   <div>
                     <h3 className="text-xl font-black flex items-center gap-2">
                       <TrendingUp className="h-5 w-5 text-primary" />
-                      Orders per Day
+                      Orders per Day / 每日订单
                     </h3>
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest mt-1">Last 7 days activity</p>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest mt-1">Last 7 days activity / 最近 7 天活动</p>
                   </div>
                 </div>
                 <div className="h-[300px] w-full">
@@ -464,9 +483,9 @@ export default function AdminDashboard() {
                   <div>
                     <h3 className="text-xl font-black flex items-center gap-2">
                       <BarChart3 className="h-5 w-5 text-primary" />
-                      Delivery Performance
+                      Delivery Performance / 交付绩效
                     </h3>
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest mt-1">Status distribution</p>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest mt-1">Status distribution / 状态分布</p>
                   </div>
                 </div>
                 <div className="h-[300px] w-full">
@@ -503,19 +522,19 @@ export default function AdminDashboard() {
             {/* Recent Orders Preview */}
             <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
               <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-xl font-black">Recent Shipments</h3>
-                <button onClick={() => setActiveTab("orders")} className="text-sm font-bold text-primary hover:underline">View All</button>
+                <h3 className="text-xl font-black">Recent Shipments / 最近货运</h3>
+                <button onClick={() => setActiveTab("orders")} className="text-sm font-bold text-primary hover:underline">View All / 查看全部</button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 text-slate-400 text-xs font-black uppercase tracking-widest">
                     <tr>
-                      <th className="px-8 py-4">Tracking Code</th>
-                      <th className="px-8 py-4">Customer</th>
-                      <th className="px-8 py-4">Status</th>
-                      <th className="px-8 py-4">Location</th>
-                      <th className="px-8 py-4">Last Updated</th>
-                      <th className="px-8 py-4">Actions</th>
+                      <th className="px-8 py-4">Tracking Code / 运单号</th>
+                      <th className="px-8 py-4">Customer / 客户</th>
+                      <th className="px-8 py-4">Status / 状态</th>
+                      <th className="px-8 py-4">Location / 位置</th>
+                      <th className="px-8 py-4">Last Updated / 最后更新</th>
+                      <th className="px-8 py-4">Actions / 操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -526,6 +545,7 @@ export default function AdminDashboard() {
                         <td className="px-8 py-5">
                           <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[order.status]}20`, color: STATUS_COLORS[order.status] }}>
                             {order.status}
+                            <span className="ml-1 opacity-60">({STATUS_CN[order.status] || "未知"})</span>
                           </span>
                         </td>
                         <td className="px-8 py-5 text-slate-500 font-bold text-sm">{order.location}</td>
@@ -608,6 +628,7 @@ export default function AdminDashboard() {
                         <td className="px-8 py-5">
                           <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter bg-blue-50 text-blue-600 border border-blue-100">
                             {order.status}
+                            <span className="ml-1 opacity-60">({STATUS_CN[order.status] || "未知"})</span>
                           </span>
                         </td>
                         <td className="px-8 py-5 text-slate-500 font-bold text-sm">{order.location}</td>
@@ -650,41 +671,41 @@ export default function AdminDashboard() {
                   </div>
                   <div>
                     <h3 className="text-2xl font-black text-slate-900">{selectedOrder.tracking_code}</h3>
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Order Details</p>
+                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Order Details / 订单详情</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-8 mb-10">
                   <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Name</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Name / 客户姓名</p>
                     <p className="font-bold text-slate-900">{selectedOrder.customer_name || "N/A"}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Status</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Status / 当前状态</p>
                     <div className="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[selectedOrder.status]}20`, color: STATUS_COLORS[selectedOrder.status] }}>
-                      {selectedOrder.status}
+                      {selectedOrder.status} ({STATUS_CN[selectedOrder.status] || "未知"})
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Location</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Location / 当前位置</p>
                     <p className="font-bold text-slate-900 flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-primary" />
                       {selectedOrder.location}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Truck Assigned</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Truck Assigned / 所属车辆</p>
                     <p className="font-bold text-slate-900 flex items-center gap-2">
                       <Truck className="h-4 w-4 text-primary" />
-                      {selectedOrder.truck_code || "Unassigned"}
+                      {selectedOrder.truck_code || "Unassigned / 未分配"}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Weight / Volume</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Weight / Volume (重量 / 体积)</p>
                     <p className="font-bold text-slate-900">{selectedOrder.weight || 0}kg / {selectedOrder.volume || 0}m³</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Cost</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Cost / 总费用</p>
                     <p className="font-bold text-primary">
                       {selectedOrder.total_cost ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedOrder.total_cost) : "N/A"}
                     </p>
@@ -692,7 +713,7 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Raw Data / Metadata</h4>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Raw Data / Metadata (原始数据)</h4>
                   <div className="max-h-40 overflow-y-auto text-[10px] font-mono text-slate-500 space-y-1">
                     {Object.entries(selectedOrder.details || {}).map(([key, value]) => (
                       <div key={key} className="flex justify-between border-b border-slate-200 py-1">
@@ -785,7 +806,10 @@ export default function AdminDashboard() {
                           className="flex items-center justify-between p-6 rounded-2xl bg-slate-50 border-2 border-transparent hover:border-primary hover:bg-white transition-all group"
                         >
                           <div className="text-left">
-                            <p className="font-black text-slate-900 group-hover:text-primary transition-colors">{action.label}</p>
+                            <p className="font-black text-slate-900 group-hover:text-primary transition-colors">
+                              {action.label}
+                              <span className="block text-[10px] font-bold text-slate-400 opacity-60 leading-none mt-1">{action.subLabel}</span>
+                            </p>
                             <p className="text-xs text-slate-400 font-bold uppercase tracking-tight mt-1">{action.status}</p>
                           </div>
                           <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
@@ -823,7 +847,7 @@ export default function AdminDashboard() {
   );
 }
 
-function StatCard({ label, value, icon, color }: any) {
+function StatCard({ label, subLabel, value, icon, color }: any) {
   return (
     <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 group hover:scale-[1.02] transition-all">
       <div className="flex items-center justify-between mb-4">
@@ -832,8 +856,11 @@ function StatCard({ label, value, icon, color }: any) {
         </div>
         <div className="h-1 w-8 bg-slate-100 rounded-full" />
       </div>
-      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
-      <p className="text-3xl font-black text-slate-900 mt-1">{value}</p>
+      <div className="space-y-0.5">
+        <p className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none">{label}</p>
+        {subLabel && <p className="text-[10px] font-bold text-slate-400 opacity-60 leading-none">{subLabel}</p>}
+      </div>
+      <p className="text-3xl font-black text-slate-900 mt-2">{value}</p>
     </div>
   );
 }

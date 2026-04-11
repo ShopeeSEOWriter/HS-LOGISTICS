@@ -105,6 +105,23 @@ export default function AdminTrucks() {
     "Đã giao hàng"
   ];
 
+  const STATUS_FILTERS_CN: Record<string, string> = {
+    "Tất cả": "全部",
+    "Đã nhận tại kho Trung Quốc": "已入中国仓",
+    "Đã bốc hàng lên xe": "已装车",
+    "Đã xuất kho Trung Quốc": "已从中国发货",
+    "Đang vận chuyển ra biên giới": "前往边境中",
+    "Đang làm thủ tục hải quan": "海关清关中",
+    "Đang kiểm hoá tại cửa khẩu": "海关查验中",
+    "Đã thông quan": "已完成清关",
+    "Đã về đến Việt Nam": "已入越南境",
+    "Đang vận chuyển về Hà Nội": "前往河内中",
+    "Đã về kho Hà Nội": "已到河内仓",
+    "Đang phân loại tại kho": "仓库分拣中",
+    "Đang giao hàng": "派送中",
+    "Đã giao hàng": "已送达"
+  };
+
   const BULK_STATUS_OPTIONS = [
     { label: "Đã nhận tại kho Trung Quốc", subLabel: "已入中国仓", value: "Received at China warehouse", location: "Kho Trung Quốc", color: "bg-blue-400" },
     { label: "Đã bốc hàng lên xe", subLabel: "已装车", value: "Packed into truck/container", location: "Kho Trung Quốc", color: "bg-blue-500" },
@@ -301,31 +318,43 @@ export default function AdminTrucks() {
             <button 
               onClick={() => setShowClearConfirm(true)}
               disabled={isClearing}
-              className="flex items-center gap-2 rounded-full bg-error/10 px-8 py-4 text-sm font-bold text-error shadow-xl transition-all hover:bg-error/20 active:scale-95 disabled:opacity-50"
+              className="flex flex-col items-center gap-1 rounded-full bg-error/10 px-8 py-3 text-sm font-bold text-error shadow-xl transition-all hover:bg-error/20 active:scale-95 disabled:opacity-50"
             >
-              {isClearing ? "Đang xóa..." : "Xóa hết dữ liệu"}
-              <Trash2 className="h-4 w-4" />
+              <div className="flex items-center gap-2">
+                {isClearing ? "Đang xóa..." : "Xóa hết dữ liệu"}
+                <Trash2 className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] opacity-60">删除所有数据</span>
             </button>
             <button 
               onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 rounded-full bg-surface-container-high px-8 py-4 text-sm font-bold text-on-surface shadow-xl transition-all hover:opacity-90 active:scale-95"
+              className="flex flex-col items-center gap-1 rounded-full bg-surface-container-high px-8 py-3 text-sm font-bold text-on-surface shadow-xl transition-all hover:opacity-90 active:scale-95"
             >
-              Cài đặt cước phí
-              <Scale className="h-4 w-4" />
+              <div className="flex items-center gap-2">
+                Cài đặt cước phí
+                <Scale className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] opacity-60">运费设置</span>
             </button>
             <button 
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 rounded-full bg-primary px-8 py-4 text-sm font-bold text-white shadow-xl transition-all hover:opacity-90 active:scale-95"
+              className="flex flex-col items-center gap-1 rounded-full bg-primary px-8 py-3 text-sm font-bold text-white shadow-xl transition-all hover:opacity-90 active:scale-95"
             >
-              Tạo xe mới
-              <Plus className="h-4 w-4" />
+              <div className="flex items-center gap-2">
+                Tạo xe mới
+                <Plus className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] opacity-60">创建新车</span>
             </button>
             <button 
               onClick={() => setShowUpload(!showUpload)}
-              className="flex items-center gap-2 rounded-full bg-on-background px-8 py-4 text-sm font-bold text-white shadow-xl transition-all hover:opacity-90 active:scale-95"
+              className="flex flex-col items-center gap-1 rounded-full bg-on-background px-8 py-3 text-sm font-bold text-white shadow-xl transition-all hover:opacity-90 active:scale-95"
             >
-              {showUpload ? "Đóng trình tải lên" : "Nhập dữ liệu Excel"}
-              {showUpload ? <ChevronRight className="h-4 w-4 rotate-90" /> : <Plus className="h-4 w-4" />}
+              <div className="flex items-center gap-2">
+                {showUpload ? "Đóng trình tải lên" : "Nhập dữ liệu Excel"}
+                {showUpload ? <ChevronRight className="h-4 w-4 rotate-90" /> : <Plus className="h-4 w-4" />}
+              </div>
+              <span className="text-[10px] opacity-60">{showUpload ? "关闭上传" : "导入 Excel"}</span>
             </button>
           </div>
         </div>
@@ -572,13 +601,14 @@ export default function AdminTrucks() {
               key={status}
               onClick={() => setSelectedStatus(status)}
               className={cn(
-                "rounded-xl px-6 py-2 text-xs font-bold transition-all border-2",
+                "flex flex-col items-center rounded-xl px-4 py-2 text-xs font-bold transition-all border-2",
                 selectedStatus === status 
                   ? "bg-primary text-white border-primary shadow-lg" 
                   : "bg-surface-container-low text-on-surface-variant border-transparent hover:border-primary/30 hover:bg-surface-container"
               )}
             >
-              {status}
+              <span>{status}</span>
+              <span className="text-[9px] opacity-60">{STATUS_FILTERS_CN[status]}</span>
             </button>
           ))}
         </div>
@@ -587,8 +617,11 @@ export default function AdminTrucks() {
           <div className="mb-16 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="rounded-3xl bg-surface-container-lowest p-12 shadow-editorial">
               <div className="mb-8 text-center">
-                <h2 className="font-headline text-2xl font-black">Nhập chuyến hàng mới</h2>
-                <p className="mt-1 text-xs font-bold uppercase tracking-widest opacity-40">Tải lên tệp Excel để tạo hoặc cập nhật xe và đơn hàng</p>
+                <h2 className="font-headline text-2xl font-black">
+                  Nhập chuyến hàng mới
+                  <span className="block text-lg opacity-60">导入新货运</span>
+                </h2>
+                <p className="mt-1 text-xs font-bold uppercase tracking-widest opacity-40">Tải lên tệp Excel để tạo hoặc cập nhật xe và đơn hàng / 上传 Excel 文件以创建或更新车辆和订单</p>
               </div>
               <ExcelUpload onSuccess={() => setShowUpload(false)} />
             </div>
@@ -599,11 +632,18 @@ export default function AdminTrucks() {
         <div className="mb-16 rounded-[2.5rem] bg-surface-container-lowest p-12 shadow-editorial border-2 border-primary/10">
           <div className="mb-10 flex items-end justify-between">
             <div>
-              <h2 className="font-headline text-3xl font-black text-on-surface">Cập nhật hàng loạt theo trạng thái</h2>
-              <p className="mt-2 text-sm font-medium text-on-surface-variant/60">Chọn một trạng thái bên dưới, sau đó tải lên file Excel chứa danh sách mã vận đơn.</p>
+              <h2 className="font-headline text-3xl font-black text-on-surface">
+                Cập nhật hàng loạt theo trạng thái
+                <span className="block text-xl opacity-60">按状态批量更新</span>
+              </h2>
+              <p className="mt-2 text-sm font-medium text-on-surface-variant/60">
+                Chọn một trạng thái bên dưới, sau đó tải lên file Excel chứa danh sách mã vận đơn.
+                <br />
+                选择下方的一种状态，然后上传包含运单号列表的 Excel 文件。
+              </p>
             </div>
             <div className="text-right">
-              <span className="rounded-full bg-primary/10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">Tính năng nâng cao</span>
+              <span className="rounded-full bg-primary/10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">Tính năng nâng cao / 高级功能</span>
             </div>
           </div>
 
@@ -640,11 +680,12 @@ export default function AdminTrucks() {
                     truck.status === "Đã giao hàng" ? "bg-secondary-container text-on-secondary-container" : "bg-primary/10 text-primary"
                   )}>
                     {truck.status}
+                    <span className="ml-1 opacity-60">({STATUS_FILTERS_CN[truck.status] || "未知"})</span>
                   </div>
                   <button 
                     onClick={(e) => handleDeleteTruck(e, truck.id)}
                     className="rounded-full p-2 text-on-surface-variant/40 hover:bg-error/10 hover:text-error transition-all"
-                    title="Xóa xe"
+                    title="Xóa xe / 删除车辆"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -656,7 +697,7 @@ export default function AdminTrucks() {
               <div className="mt-6 flex items-center gap-6">
                 <div className="flex items-center gap-2 text-on-surface-variant/60">
                   <Package className="h-4 w-4" />
-                  <span className="text-xs font-bold">{truck.order_count} đơn hàng</span>
+                  <span className="text-xs font-bold">{truck.order_count} đơn hàng / 订单</span>
                 </div>
                 <div className="flex items-center gap-2 text-on-surface-variant/60">
                   <Clock className="h-4 w-4" />
@@ -667,7 +708,7 @@ export default function AdminTrucks() {
               </div>
 
               <div className="mt-8 flex items-center gap-2 text-xs font-bold text-primary opacity-0 transition-all group-hover:opacity-100">
-                <span>Chi tiết xe</span>
+                <span>Chi tiết xe / 车辆详情</span>
                 <ChevronRight className="h-4 w-4" />
               </div>
             </Link>

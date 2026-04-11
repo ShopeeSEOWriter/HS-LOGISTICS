@@ -124,6 +124,20 @@ Nội dung: ${text}`,
 
     // Use aoa_to_sheet since translatedData is now an array of arrays
     const worksheet = XLSX.utils.aoa_to_sheet(translatedData);
+    
+    // Calculate column widths (AutoFit)
+    const colWidths = translatedData[0].map((_: any, colIndex: number) => {
+      const maxWidth = translatedData.reduce((max: number, row: any[]) => {
+        const cellValue = row[colIndex] ? String(row[colIndex]) : "";
+        // Estimate width: handle multi-byte characters (Vietnamese/Chinese) better by counting length
+        // A simple length check is usually enough for basic AutoFit in xlsx
+        return Math.max(max, cellValue.length);
+      }, 10); // Minimum width of 10
+      return { wch: maxWidth + 5 }; // Add padding for better readability
+    });
+    
+    worksheet["!cols"] = colWidths;
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Translated Data");
 

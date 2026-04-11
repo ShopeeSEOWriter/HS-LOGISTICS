@@ -332,25 +332,31 @@ export default function AdminTruckDetail() {
       <AdminSidebar />
       <main className="flex-1 p-12 pt-24">
         <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <button 
-              onClick={() => navigate("/admin/trucks")}
-              className="flex items-center gap-2 text-sm font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span>Quay lại danh sách xe</span>
-            </button>
-            
-            <div className="h-4 w-[1px] bg-surface-container" />
-            
-            <button 
-              onClick={() => navigate("/")}
-              className="flex items-center gap-2 text-sm font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span>Trang chủ theo dõi</span>
-            </button>
-          </div>
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={() => navigate("/admin/trucks")}
+                className="flex flex-col items-start text-sm font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <ChevronLeft className="h-4 w-4" />
+                  <span>Quay lại danh sách xe</span>
+                </div>
+                <span className="text-[10px] opacity-60 ml-6">返回车辆列表</span>
+              </button>
+              
+              <div className="h-4 w-[1px] bg-surface-container" />
+              
+              <button 
+                onClick={() => navigate("/")}
+                className="flex flex-col items-start text-sm font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <ChevronLeft className="h-4 w-4" />
+                  <span>Trang chủ theo dõi</span>
+                </div>
+                <span className="text-[10px] opacity-60 ml-6">返回跟踪首页</span>
+              </button>
+            </div>
 
           <button 
             onClick={handleDeleteTruck}
@@ -394,7 +400,7 @@ export default function AdminTruckDetail() {
               </div>
               
               <div className="text-right">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Cập nhật cuối</div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Cập nhật cuối / 最后更新</div>
                 <div className="mt-1 font-headline text-xl font-bold">{safeFormatDate(truck.last_updated)}</div>
               </div>
             </div>
@@ -405,9 +411,12 @@ export default function AdminTruckDetail() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Package className="h-5 w-5 text-primary" />
-                    <h2 className="font-headline text-xl font-bold">Danh sách đơn hàng ({orders.length})</h2>
+                    <h2 className="font-headline text-xl font-bold">
+                      Danh sách đơn hàng ({orders.length})
+                      <span className="block text-sm opacity-60">订单列表</span>
+                    </h2>
                   </div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Orders in this truck</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-40">Orders in this truck / 此车内的订单</div>
                 </div>
               </div>
               
@@ -415,11 +424,11 @@ export default function AdminTruckDetail() {
                 <table className="w-full text-left">
                   <thead className="bg-surface-container-low/50">
                     <tr>
-                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Mã vận đơn</th>
-                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Thông tin</th>
-                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Cước phí</th>
-                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Trạng thái</th>
-                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-right">Thao tác</th>
+                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Mã vận đơn / 运单号</th>
+                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Thông tin / 信息</th>
+                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Cước phí / 运费</th>
+                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Trạng thái / 状态</th>
+                      <th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-right">Thao tác / 操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-container/30">
@@ -485,7 +494,7 @@ export default function AdminTruckDetail() {
               <div className="overflow-hidden rounded-3xl bg-surface-container-lowest shadow-editorial">
                 <div className="signature-gradient p-8 text-on-primary">
                   <h3 className="font-headline text-2xl font-bold">Cập nhật trạng thái</h3>
-                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest opacity-80">Update status for all orders</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest opacity-80">Update status for all orders / 批量更新状态</p>
                 </div>
                 
                 <div className="p-8 space-y-3">
@@ -527,7 +536,10 @@ export default function AdminTruckDetail() {
               <div className="rounded-3xl bg-surface-container-lowest p-8 shadow-editorial">
                 <div className="flex items-center gap-3 mb-6">
                   <Clock className="h-5 w-5 text-primary" />
-                  <h4 className="font-headline text-lg font-bold">Lịch trình xe</h4>
+                  <h4 className="font-headline text-lg font-bold">
+                    Lịch trình xe
+                    <span className="block text-sm opacity-60">车辆行程</span>
+                  </h4>
                 </div>
                 <div className="space-y-6">
                   {STATUS_OPTIONS.map((option, index) => {
@@ -571,7 +583,7 @@ export default function AdminTruckDetail() {
           <div className="w-full max-w-md rounded-3xl bg-surface-container-lowest p-10 shadow-2xl">
             <div className="mb-8 flex items-center justify-between">
               <div>
-                <h3 className="font-headline text-2xl font-bold text-on-surface">Sửa thông tin xe</h3>
+                <h3 className="font-headline text-2xl font-bold text-on-surface">Sửa thông tin xe / 编辑车辆信息</h3>
                 <p className="text-xs font-bold uppercase tracking-widest text-primary">{truck.truck_code}</p>
               </div>
               <button 
@@ -620,7 +632,7 @@ export default function AdminTruckDetail() {
           <div className="w-full max-w-lg rounded-3xl bg-surface-container-lowest p-10 shadow-2xl">
             <div className="mb-8 flex items-center justify-between">
               <div>
-                <h3 className="font-headline text-2xl font-bold text-on-surface">Sửa đơn hàng</h3>
+                <h3 className="font-headline text-2xl font-bold text-on-surface">Sửa đơn hàng / 编辑订单</h3>
                 <p className="text-xs font-bold uppercase tracking-widest text-primary">{editingOrder.tracking_code}</p>
               </div>
               <button 
