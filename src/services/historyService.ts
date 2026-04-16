@@ -13,6 +13,7 @@ import {
   limit,
   Timestamp
 } from "firebase/firestore";
+import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 
 const COLLECTION_NAME = "user_tracking_history";
 
@@ -44,7 +45,7 @@ export const saveTrackingHistory = async (userId: string, trackingCode: string) 
       });
     }
   } catch (error) {
-    console.error("Error saving tracking history:", error);
+    handleFirestoreError(error, OperationType.WRITE, COLLECTION_NAME);
   }
 };
 
@@ -79,7 +80,7 @@ export const getTrackingHistory = async (userId: string) => {
     if (oldItems.length > 0) {
       // We don't await this to avoid blocking the UI
       Promise.all(oldItems.map(item => deleteDoc(doc(db, COLLECTION_NAME, item.id))))
-        .catch(err => console.error("Error during lazy cleanup:", err));
+        .catch(err => handleFirestoreError(err, OperationType.DELETE, `${COLLECTION_NAME}/cleanup`));
     }
 
     return allItems.filter((item: any) => {
@@ -87,7 +88,7 @@ export const getTrackingHistory = async (userId: string) => {
       return lastChecked >= thirtyDaysAgoMs;
     });
   } catch (error) {
-    console.error("Error getting tracking history:", error);
+    handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
     // Fallback if orderBy fails due to missing index
     try {
       const q = query(
@@ -113,7 +114,7 @@ export const getTrackingHistory = async (userId: string) => {
 
       if (oldItems.length > 0) {
         Promise.all(oldItems.map(item => deleteDoc(doc(db, COLLECTION_NAME, item.id))))
-          .catch(err => console.error("Error during lazy cleanup (fallback):", err));
+          .catch(err => handleFirestoreError(err, OperationType.DELETE, `${COLLECTION_NAME}/cleanup_fallback`));
       }
 
       return allItems
@@ -127,7 +128,7 @@ export const getTrackingHistory = async (userId: string) => {
           return timeB - timeA;
         });
     } catch (innerError) {
-      console.error("Fallback error getting tracking history:", innerError);
+      handleFirestoreError(innerError, OperationType.LIST, `${COLLECTION_NAME}/fallback`);
       return [];
     }
   }

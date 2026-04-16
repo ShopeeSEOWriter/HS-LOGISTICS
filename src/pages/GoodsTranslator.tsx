@@ -1,11 +1,23 @@
 import React, { useState, useRef } from "react";
-import { Upload, FileText, Download, Loader2, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Upload, FileText, Download, Loader2, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import * as XLSX from "xlsx";
 import { GoogleGenAI } from "@google/genai";
 import { cn } from "../lib/utils";
 
-// Initialize Gemini AI
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Lazy initialization for Gemini AI
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = () => {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not set. Please configure it in the application settings.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+};
 
 export default function GoodsTranslator() {
   const [file, setFile] = useState<File | null>(null);
@@ -45,6 +57,7 @@ export default function GoodsTranslator() {
     if (!text || typeof text !== "string") return text;
     
     try {
+      const ai = getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Dịch nội dung sau từ tiếng Trung sang tiếng Việt. 
@@ -65,6 +78,14 @@ Nội dung: ${text}`,
 
   const processFile = async () => {
     if (!file) return;
+
+    try {
+      // Check if AI is available before starting
+      getAI();
+    } catch (err: any) {
+      setError(err.message);
+      return;
+    }
 
     setLoading(true);
     setProgress(0);
@@ -145,8 +166,19 @@ Nội dung: ${text}`,
     XLSX.writeFile(workbook, newFileName);
   };
 
+  const isApiKeyMissing = !process.env.GEMINI_API_KEY;
+
   return (
     <div className="mx-auto max-w-4xl px-8 py-12">
+      <Link 
+        to="/" 
+        className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-all hover:-translate-x-1"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span>Quay lại trang chủ</span>
+        <span className="opacity-40">/ 返回首页</span>
+      </Link>
+
       <div className="mb-12 text-center">
         <h1 className="font-headline text-4xl font-black tracking-tight text-on-surface">
           Dịch thuật Hàng Hóa
@@ -155,6 +187,16 @@ Nội dung: ${text}`,
         <p className="mt-4 text-on-surface-variant">
           Tải lên tệp Excel để dịch nội dung cột "GIAO HANG TAN NOI" từ tiếng Trung sang tiếng Việt bằng AI.
         </p>
+
+        {isApiKeyMissing && (
+          <div className="mt-6 flex items-center gap-3 rounded-2xl bg-error/10 p-4 text-error border border-error/20 max-w-2xl mx-auto">
+            <AlertCircle className="h-5 w-5 shrink-0" />
+            <p className="text-sm font-bold text-left">
+              Thiếu GEMINI_API_KEY. Vui lòng cấu hình API Key trong cài đặt để sử dụng tính năng này.
+              <span className="block text-[10px] opacity-60 font-normal">未设置 GEMINI_API_KEY。请在设置中配置 API 密钥以使用此功能。</span>
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">

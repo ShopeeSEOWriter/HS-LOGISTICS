@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc, writeBatch, getDocs, where, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Truck, Package, ChevronRight, Clock, Plus, LayoutDashboard, Boxes, Scale, Headset, Trash2, X, MapPin } from "lucide-react";
+import { Truck, Package, ChevronRight, Clock, Plus, LayoutDashboard, Boxes, Scale, Headset, Trash2, X, MapPin, ArrowLeft } from "lucide-react";
 import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import ExcelUpload from "../components/ExcelUpload";
 import { Link } from "react-router-dom";
@@ -303,6 +303,17 @@ export default function AdminTrucks() {
 
       {/* Main Content */}
       <main className="ml-64 flex-1 p-12 pt-24">
+        <div className="mb-8">
+          <Link 
+            to="/" 
+            className="inline-flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-all hover:-translate-x-1"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Quay lại trang chủ</span>
+            <span className="opacity-40">/ 返回首页</span>
+          </Link>
+        </div>
+
         <div className="mb-12 flex items-end justify-between">
           <div>
             <div className="flex items-center gap-2">

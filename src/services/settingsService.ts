@@ -1,5 +1,6 @@
 import { db } from "../lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 
 export interface RateEntry {
   hn_kg: number;
@@ -52,7 +53,7 @@ export const getShippingSettings = async (): Promise<ShippingSettings> => {
       return DEFAULT_SETTINGS;
     }
   } catch (error) {
-    console.error("Error getting shipping settings:", error);
+    handleFirestoreError(error, OperationType.GET, `${COLLECTION_NAME}/${SETTINGS_DOC_ID}`);
     return DEFAULT_SETTINGS;
   }
 };
@@ -62,7 +63,7 @@ export const updateShippingSettings = async (settings: ShippingSettings) => {
     const docRef = doc(db, COLLECTION_NAME, SETTINGS_DOC_ID);
     await setDoc(docRef, settings);
   } catch (error) {
-    console.error("Error updating shipping settings:", error);
+    handleFirestoreError(error, OperationType.WRITE, `${COLLECTION_NAME}/${SETTINGS_DOC_ID}`);
     throw error;
   }
 };

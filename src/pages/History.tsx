@@ -1,9 +1,19 @@
-import { PlusCircle, Truck, CheckCircle2, AlertTriangle, ChevronRight, FileText } from "lucide-react";
+import { Link } from "react-router-dom";
+import { PlusCircle, Truck, CheckCircle2, AlertTriangle, ChevronRight, FileText, ArrowLeft } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 export default function History() {
   return (
     <main className="mx-auto w-full max-w-7xl px-8 py-12">
+      <Link 
+        to="/" 
+        className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-all hover:-translate-x-1"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span>Quay lại trang chủ</span>
+        <span className="opacity-40">/ 返回首页</span>
+      </Link>
+
       <div className="mb-16 flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
         <div>
           <h1 className="font-headline text-5xl font-black tracking-tighter text-on-surface">

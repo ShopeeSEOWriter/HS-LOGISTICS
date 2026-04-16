@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Calculator, MapPin, Scale, Boxes, AlertCircle, ChevronRight, Tag } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Calculator, MapPin, Scale, Boxes, AlertCircle, ChevronRight, Tag, ArrowLeft } from "lucide-react";
 import { cn } from "../lib/utils";
 import { getShippingSettings, calculateShippingFee, ShippingSettings, PRODUCT_CATEGORIES } from "../services/settingsService";
 import { motion, AnimatePresence } from "framer-motion";
@@ -37,6 +38,15 @@ export default function ShippingCalculator() {
   return (
     <div className="min-h-screen bg-surface py-12 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
+        <Link 
+          to="/" 
+          className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-all hover:-translate-x-1"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Quay lại trang chủ</span>
+          <span className="opacity-40">/ 返回首页</span>
+        </Link>
+
         <div className="mb-12 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-lg">
             <Calculator className="h-8 w-8" />

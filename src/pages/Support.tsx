@@ -1,9 +1,19 @@
-import { Search, MessageSquare, Phone, Mail, MapPin, ChevronRight, HelpCircle, FileQuestion, BookOpen, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Search, MessageSquare, Phone, Mail, MapPin, ChevronRight, HelpCircle, FileQuestion, BookOpen, ShieldCheck, ArrowLeft } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 export default function Support() {
   return (
     <main className="relative mx-auto w-full max-w-7xl px-8 py-12">
+      <Link 
+        to="/" 
+        className="relative z-10 mb-8 inline-flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-all hover:-translate-x-1"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span>Quay lại trang chủ</span>
+        <span className="opacity-40">/ 返回首页</span>
+      </Link>
+
       {/* Background Decorative Grids */}
       <div className="grid-pattern pointer-events-none absolute left-0 top-0 h-full w-full opacity-[0.02]" />
       <div className="grid-pattern pointer-events-none absolute -right-20 top-20 h-80 w-80 opacity-10" />

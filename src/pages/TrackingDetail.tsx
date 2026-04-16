@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, Truck, MapPin, CheckCircle2, Clock, Info, Headset, Route, AlertCircle, RefreshCw, ChevronRight, Scale, AlertTriangle, Boxes } from "lucide-react";
+import { Package, Truck, MapPin, CheckCircle2, Clock, Info, Headset, Route, AlertCircle, RefreshCw, ChevronRight, Scale, AlertTriangle, Boxes, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import { useParams, Link } from "react-router-dom";
 import { doc, onSnapshot, collection, query, where, orderBy } from "firebase/firestore";
@@ -293,6 +293,15 @@ export default function TrackingDetail() {
 
   return (
     <main className="relative mx-auto w-full max-w-7xl px-8 py-12">
+      <Link 
+        to="/" 
+        className="relative z-10 mb-8 inline-flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-all hover:-translate-x-1"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span>Quay lại trang chủ</span>
+        <span className="opacity-40">/ 返回首页</span>
+      </Link>
+
       {/* Background Decorative Grids */}
       <div className="grid-pattern pointer-events-none absolute left-0 top-0 h-full w-full opacity-[0.03]" />
       <div className="grid-pattern pointer-events-none absolute -right-20 top-40 h-64 w-64 opacity-20" />

@@ -3,6 +3,7 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/aut
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { useNavigate } from "react-router-dom";
+import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 import { Truck, Lock, User, AlertCircle, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -37,7 +38,12 @@ export default function AdminLogin() {
         setError("Access denied. You do not have admin privileges.");
       }
     } catch (err: any) {
-      console.error("Login error:", err);
+      if (err.code?.startsWith("auth/")) {
+        console.error("Login error:", err);
+      } else {
+        handleFirestoreError(err, OperationType.GET, `users/${email}`);
+      }
+      
       let message = "Email hoặc mật khẩu không chính xác. Vui lòng thử lại.";
       
       if (err.code === "auth/invalid-credential") {

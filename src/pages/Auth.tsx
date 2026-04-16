@@ -8,6 +8,7 @@ import {
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
+import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 import { Mail, Lock, Loader2, AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -49,7 +50,12 @@ export default function Auth() {
         navigate("/");
       }
     } catch (err: any) {
-      console.error("Auth error:", err);
+      if (err.code?.startsWith("auth/")) {
+        console.error("Auth error:", err);
+      } else {
+        handleFirestoreError(err, OperationType.WRITE, `users/${email}`);
+      }
+      
       let message = "Đã có lỗi xảy ra. Vui lòng thử lại.";
       
       if (err.code === "auth/invalid-credential") {

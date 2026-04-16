@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { Package, Clock, Trash2, ChevronRight, Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Package, Clock, Trash2, ChevronRight, Search, Loader2, AlertCircle, RefreshCw, ArrowLeft } from "lucide-react";
 import { cn, safeFormatDate } from "../lib/utils";
 import { format } from "date-fns";
 import { getTrackingHistory } from "../services/historyService";
@@ -88,6 +88,15 @@ export default function UserHistory() {
 
   return (
     <div className="mx-auto max-w-7xl px-8 py-12">
+      <Link 
+        to="/" 
+        className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-all hover:-translate-x-1"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span>Quay lại trang chủ</span>
+        <span className="opacity-40">/ 返回首页</span>
+      </Link>
+
       <div className="mb-12 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-3">
