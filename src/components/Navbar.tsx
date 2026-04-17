@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { User, Bell, HelpCircle, Search, Menu, Package, LogOut, History as HistoryIcon } from "lucide-react";
-import { cn } from "@/src/lib/utils";
+import { cn } from "../lib/utils";
 import { useAuth } from "../hooks/useAuth";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -36,8 +36,8 @@ export default function Navbar() {
 
   return (
     <nav className={cn(
-      "sticky top-0 z-50 w-full border-b border-surface-container/50 bg-surface/80 backdrop-blur-xl",
-      isOps && "ml-64 w-[calc(100%-16rem)]"
+      "sticky top-0 z-50 w-full border-b border-surface-container/50 bg-surface/80 backdrop-blur-xl transition-all duration-300",
+      isOps && "md:ml-64 md:w-[calc(100%-16rem)]"
     )}>
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-8">
         <div className="flex items-center gap-8">

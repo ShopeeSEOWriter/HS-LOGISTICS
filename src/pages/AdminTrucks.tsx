@@ -8,13 +8,13 @@ import { Link } from "react-router-dom";
 import AdminSidebar from "../components/AdminSidebar";
 import { format } from "date-fns";
 import { useAuth } from "../hooks/useAuth";
-import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 
 import BulkUpdateModal from "../components/BulkUpdateModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import MessageModal from "../components/MessageModal";
 
-import { getShippingSettings, updateShippingSettings, ShippingSettings, RateEntry, PRODUCT_CATEGORIES } from "../services/settingsService";
+import { getShippingSettings, updateShippingSettings, getGeminiApiKey, updateGeminiApiKey, ShippingSettings, RateEntry, PRODUCT_CATEGORIES } from "../services/settingsService";
 
 export default function AdminTrucks() {
   const [trucks, setTrucks] = useState<any[]>([]);
@@ -302,7 +302,7 @@ export default function AdminTrucks() {
       <AdminSidebar />
 
       {/* Main Content */}
-      <main className="ml-64 flex-1 p-12 pt-24">
+      <main className="ml-0 md:ml-64 flex-1 p-6 md:p-12 pt-24 md:pt-12">
         <div className="mb-8">
           <Link 
             to="/" 
@@ -314,44 +314,54 @@ export default function AdminTrucks() {
           </Link>
         </div>
 
-        <div className="mb-12 flex items-end justify-between">
+        <div className="mb-12 flex flex-col lg:flex-row lg:items-end justify-between gap-8">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-headline text-4xl font-black tracking-tight">Quản lý xe vận chuyển</h1>
-              <span className="text-sm font-bold text-on-surface-variant/50">/ 车辆管理</span>
+              <h1 className="font-headline text-2xl md:text-4xl font-black tracking-tight">Quản lý xe vận chuyển</h1>
+              <span className="text-sm font-bold text-on-surface-variant/50 hidden md:inline">/ 车辆管理</span>
             </div>
             <p className="mt-2 text-sm font-medium text-on-surface-variant/60">
               Quản lý danh sách xe, container và cập nhật trạng thái hàng loạt.
             </p>
           </div>
           
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
+            <Link 
+              to="/admin/translator"
+              className="flex-1 md:flex-none flex flex-col items-center gap-1 rounded-full bg-surface-container-high px-6 py-3 text-sm font-bold text-on-surface shadow-xl transition-all hover:opacity-90 active:scale-95"
+            >
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                Dịch list xe
+                <Boxes className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] opacity-60">翻译货物清单</span>
+            </Link>
             <button 
               onClick={() => setShowClearConfirm(true)}
               disabled={isClearing}
-              className="flex flex-col items-center gap-1 rounded-full bg-error/10 px-8 py-3 text-sm font-bold text-error shadow-xl transition-all hover:bg-error/20 active:scale-95 disabled:opacity-50"
+              className="flex-1 md:flex-none flex flex-col items-center gap-1 rounded-full bg-error/10 px-6 py-3 text-sm font-bold text-error shadow-xl transition-all hover:bg-error/20 active:scale-95 disabled:opacity-50"
             >
               <div className="flex items-center gap-2">
-                {isClearing ? "Đang xóa..." : "Xóa hết dữ liệu"}
+                {isClearing ? "Xóa..." : "Xóa hết"}
                 <Trash2 className="h-4 w-4" />
               </div>
-              <span className="text-[10px] opacity-60">删除所有数据</span>
+              <span className="text-[10px] opacity-60">删除数据</span>
             </button>
             <button 
               onClick={() => setShowSettings(true)}
-              className="flex flex-col items-center gap-1 rounded-full bg-surface-container-high px-8 py-3 text-sm font-bold text-on-surface shadow-xl transition-all hover:opacity-90 active:scale-95"
+              className="flex-1 md:flex-none flex flex-col items-center gap-1 rounded-full bg-surface-container-high px-6 py-3 text-sm font-bold text-on-surface shadow-xl transition-all hover:opacity-90 active:scale-95"
             >
-              <div className="flex items-center gap-2">
-                Cài đặt cước phí
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                Cài đặt cước
                 <Scale className="h-4 w-4" />
               </div>
               <span className="text-[10px] opacity-60">运费设置</span>
             </button>
             <button 
               onClick={() => setShowCreateModal(true)}
-              className="flex flex-col items-center gap-1 rounded-full bg-primary px-8 py-3 text-sm font-bold text-white shadow-xl transition-all hover:opacity-90 active:scale-95"
+              className="flex-1 md:flex-none flex flex-col items-center gap-1 rounded-full bg-primary px-6 py-3 text-sm font-bold text-white shadow-xl transition-all hover:opacity-90 active:scale-95"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 whitespace-nowrap">
                 Tạo xe mới
                 <Plus className="h-4 w-4" />
               </div>
@@ -359,13 +369,13 @@ export default function AdminTrucks() {
             </button>
             <button 
               onClick={() => setShowUpload(!showUpload)}
-              className="flex flex-col items-center gap-1 rounded-full bg-on-background px-8 py-3 text-sm font-bold text-white shadow-xl transition-all hover:opacity-90 active:scale-95"
+              className="flex-1 md:flex-none flex flex-col items-center gap-1 rounded-full bg-on-background px-6 py-3 text-sm font-bold text-white shadow-xl transition-all hover:opacity-90 active:scale-95"
             >
-              <div className="flex items-center gap-2">
-                {showUpload ? "Đóng trình tải lên" : "Nhập dữ liệu Excel"}
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                {showUpload ? "Hủy" : "Nhập Excel"}
                 {showUpload ? <ChevronRight className="h-4 w-4 rotate-90" /> : <Plus className="h-4 w-4" />}
               </div>
-              <span className="text-[10px] opacity-60">{showUpload ? "关闭上传" : "导入 Excel"}</span>
+              <span className="text-[10px] opacity-60">{showUpload ? "关闭" : "导入 Excel"}</span>
             </button>
           </div>
         </div>

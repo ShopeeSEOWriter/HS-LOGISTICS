@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, where, writeBatch, getDoc, setDoc } from "firebase/firestore";
 import { db, auth } from "../lib/firebase";
-import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 import * as XLSX from "xlsx";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
@@ -366,10 +366,10 @@ export default function AdminDashboard() {
       <AdminSidebar />
 
       {/* Main Content */}
-      <main className="flex-1 p-12 overflow-y-auto ml-64">
-        <header className="flex items-center justify-between mb-12">
+      <main className="flex-1 p-6 md:p-12 overflow-y-auto ml-0 md:ml-64 pt-24 md:pt-12">
+        <header className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
           <div>
-            <h2 className="text-3xl font-black text-slate-900">
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900 leading-tight">
               {activeTab === "overview" ? "Dashboard Overview / 仪表盘概览" : 
                activeTab === "orders" ? "Manage Orders / 订单管理" : 
                activeTab === "trucks" ? "Truck Management / 车辆管理" : "System Settings / 系统设置"}
@@ -377,7 +377,7 @@ export default function AdminDashboard() {
             <p className="text-slate-500 font-medium">Welcome back, Administrator. / 欢迎回来，管理员。</p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <button 
               onClick={fetchData}
               className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors text-slate-600"
@@ -425,7 +425,7 @@ export default function AdminDashboard() {
         {activeTab === "overview" && (
           <div className="space-y-12">
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
               <StatCard label="Total Orders" subLabel="总订单" value={stats.total} icon={<Package />} color="bg-blue-500" />
               <StatCard label="In China" subLabel="在中国" value={stats.china} icon={<MapPin />} color="bg-amber-500" />
               <StatCard label="In Transit" subLabel="运输中" value={stats.transit} icon={<Truck />} color="bg-indigo-500" />

@@ -6,7 +6,7 @@ import { doc, onSnapshot, collection, query, where, orderBy } from "firebase/fir
 import { db } from "../lib/firebase";
 import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import { format } from "date-fns";
-import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 import { useAuth } from "../hooks/useAuth";
 
 const STATUS_STEPS = [

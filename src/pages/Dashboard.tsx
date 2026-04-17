@@ -1,61 +1,22 @@
-import { LayoutDashboard, Truck, Boxes, Scale, Headset, PlusCircle, Search, Bell, HelpCircle, Upload, Edit, ChevronRight, CheckCircle, AlertTriangle, Languages } from "lucide-react";
-import { cn } from "@/src/lib/utils";
+import { Truck, PlusCircle, Search, Upload, Edit, ChevronRight, CheckCircle, AlertTriangle, Languages, LayoutDashboard, Boxes, Scale, Headset } from "lucide-react";
+import { cn } from "../lib/utils";
 import { Link } from "react-router-dom";
+import AdminSidebar from "../components/AdminSidebar";
 
 export default function Dashboard() {
   return (
     <div className="flex min-h-screen bg-surface">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-surface-container-low py-8 font-headline">
-        <div className="mb-12 flex items-center gap-3 px-8">
-          <div className="signature-gradient flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-lg">
-            <Truck className="h-6 w-6" />
-          </div>
-          <div>
-            <div className="text-xl font-black leading-none text-on-surface">HS</div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">Logistics</div>
-            <div className="text-[8px] font-bold uppercase text-primary mt-1">和晟越南货运</div>
-          </div>
-        </div>
-
-        <nav className="flex-1 space-y-1">
-          <SidebarLink icon={<LayoutDashboard className="h-5 w-5" />} label="Bảng điều khiển" subLabel="仪表盘" active />
-          <SidebarLink icon={<Truck className="h-5 w-5" />} label="Vận chuyển" subLabel="发货" />
-          <SidebarLink icon={<Boxes className="h-5 w-5" />} label="Dịch list xe" subLabel="翻译车单" to="/admin/translator" />
-          <SidebarLink icon={<Scale className="h-5 w-5" />} label="Hải quan" subLabel="海关" />
-          <SidebarLink icon={<Headset className="h-5 w-5" />} label="Hỗ trợ" subLabel="支持" />
-          
-          <div className="my-4 h-[1px] w-full bg-surface-container mx-4 opacity-50" />
-          
-          <Link to="/" className="ml-2 flex items-center gap-4 rounded-l-2xl px-6 py-4 text-on-surface-variant hover:bg-surface-container transition-all">
-            <div className="text-primary"><ChevronRight className="h-5 w-5 rotate-180" /></div>
-            <div className="flex flex-col">
-              <span className="text-sm font-bold leading-none">Trang chủ</span>
-              <span className="mt-1 text-[9px] font-bold uppercase tracking-tighter opacity-60">返回首页</span>
-            </div>
-          </Link>
-        </nav>
-
-        <div className="mt-auto px-4">
-          <button className="signature-gradient flex w-full flex-col items-center justify-center rounded-2xl py-4 font-bold text-on-primary shadow-xl transition-opacity hover:opacity-90">
-            <div className="flex items-center gap-2">
-              <PlusCircle className="h-4 w-4" />
-              <span className="text-xs">Tạo vận đơn mới</span>
-            </div>
-            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest opacity-80">新建货运单</span>
-          </button>
-        </div>
-      </aside>
+      <AdminSidebar />
 
       {/* Main Content */}
-      <main className="relative ml-64 flex-1 p-8 pt-24">
+      <main className="relative ml-0 md:ml-64 flex-1 p-6 md:p-12 pt-24 md:pt-12 overflow-x-hidden">
         {/* Background Decorative Grids */}
         <div className="grid-pattern pointer-events-none absolute left-0 top-0 h-full w-full opacity-[0.01]" />
         <div className="grid-pattern pointer-events-none absolute -right-10 top-40 h-64 w-64 opacity-10" />
         <div className="grid-pattern pointer-events-none absolute -left-10 bottom-40 h-80 w-80 opacity-10" />
 
         {/* Summary Cards */}
-        <div className="relative z-10 mb-12 grid grid-cols-1 gap-6 md:grid-cols-5">
+        <div className="relative z-10 mb-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
           <SummaryCard title="Tổng đơn hàng" subTitle="订单总数" value="42,500" trend="+12% SO VỚI THÁNG TRƯỚC" />
           <SummaryCard title="Tại Trung Quốc" subTitle="在中国" value="8,420" progress={25} />
           <SummaryCard title="Tại Hải Quan" subTitle="海关检查中" value="1,205" status="warning" />
@@ -63,25 +24,25 @@ export default function Dashboard() {
           <SummaryCard title="Đã giao hàng" subTitle="已送达" value="17,675" status="success" />
         </div>
 
-        <div className="flex gap-8">
+        <div className="flex flex-col xl:flex-row gap-8">
           {/* Table Section */}
           <div className="flex-1 overflow-hidden rounded-2xl bg-surface-container-lowest shadow-editorial">
-            <div className="flex items-center justify-between border-b border-surface-container-low p-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-surface-container-low p-6 md:p-8 gap-6">
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="font-headline text-2xl font-black">Danh sách vận đơn</h2>
-                  <span className="text-sm font-bold text-on-surface-variant/50">/ 活跃货单</span>
+                  <span className="text-sm font-bold text-on-surface-variant/50 hidden md:inline">/ 活跃货单</span>
                 </div>
                 <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">
                   Đang giám sát 248 đơn hàng đang vận chuyển. / 正在监控 248 个运输中的货单。
                 </p>
               </div>
-              <div className="flex gap-3">
-                <Link to="/admin/translator">
-                  <TableAction icon={<Languages className="h-4 w-4" />} label="Dịch thuật Excel" subLabel="Excel 翻译" />
+              <div className="flex flex-wrap gap-2 md:gap-3">
+                <Link to="/admin/translator" className="flex-1 md:flex-none">
+                  <TableAction icon={<Languages className="h-4 w-4" />} label="Dịch Excel" subLabel="Excel 翻译" />
                 </Link>
-                <TableAction icon={<Upload className="h-4 w-4" />} label="Nhập từ Sheets" subLabel="从表格导入" />
-                <TableAction icon={<Edit className="h-4 w-4" />} label="Cập nhật hàng loạt" subLabel="批量更新" primary />
+                <TableAction icon={<Upload className="h-4 w-4" />} label="Nhập Sheets" subLabel="从表格导入" />
+                <TableAction icon={<Edit className="h-4 w-4" />} label="Cập nhật" subLabel="批量更新" primary />
               </div>
             </div>
 
@@ -126,13 +87,13 @@ export default function Dashboard() {
           </div>
 
           {/* Controls Panel */}
-          <aside className="w-96 shrink-0 space-y-6">
+          <aside className="w-full xl:w-96 shrink-0">
             <div className="sticky top-24 overflow-hidden rounded-2xl bg-surface-container-lowest shadow-editorial">
               <div className="signature-gradient p-8 text-on-primary">
                 <h3 className="font-headline text-xl font-bold">Điều phối luồng hàng</h3>
                 <p className="mt-1 text-[10px] font-bold uppercase tracking-widest opacity-80">Cập nhật trạng thái đơn hàng / 更新货单状态</p>
               </div>
-              <div className="max-h-[600px] overflow-y-auto p-8 no-scrollbar">
+              <div className="max-h-[300px] xl:max-h-[600px] overflow-y-auto p-8 no-scrollbar">
                 <ControlSection title="Đông Hưng / 东兴运营">
                   <ControlButton label="Người bán đã gửi hàng" subLabel="卖家已发货" />
                   <ControlButton label="Đã nhập kho Trung Quốc" subLabel="中国仓库已收货" />
@@ -150,21 +111,6 @@ export default function Dashboard() {
         </div>
       </main>
     </div>
-  );
-}
-
-function SidebarLink({ icon, label, subLabel, active, to = "#" }: any) {
-  return (
-    <Link to={to} className={cn(
-      "ml-2 flex items-center gap-4 rounded-l-2xl px-6 py-4 transition-all",
-      active ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant hover:bg-surface-container"
-    )}>
-      <div className={cn(active ? "text-primary" : "text-on-surface-variant/60")}>{icon}</div>
-      <div className="flex flex-col">
-        <span className="text-sm font-bold leading-none">{label}</span>
-        <span className="mt-1 text-[9px] font-bold uppercase tracking-tighter opacity-60">{subLabel}</span>
-      </div>
-    </Link>
   );
 }
 

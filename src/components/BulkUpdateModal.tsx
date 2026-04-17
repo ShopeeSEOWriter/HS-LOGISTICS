@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { doc, writeBatch, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { notificationService } from "../services/notificationService";
-import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 
 interface BulkUpdateModalProps {
   status: string;

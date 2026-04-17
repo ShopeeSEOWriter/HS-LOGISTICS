@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { PlusCircle, Truck, CheckCircle2, AlertTriangle, ChevronRight, FileText, ArrowLeft } from "lucide-react";
-import { cn } from "@/src/lib/utils";
+import { cn } from "../lib/utils";
 
 export default function History() {
   return (

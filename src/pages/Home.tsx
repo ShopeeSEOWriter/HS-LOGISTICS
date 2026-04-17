@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Package, Truck, ShieldCheck, Map, ArrowRight, ShoppingBag, Store, ShoppingCart, Clock, ChevronRight, Calculator } from "lucide-react";
 import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
-import { cn } from "@/src/lib/utils";
+import { cn } from "../lib/utils";
 import { useAuth } from "../hooks/useAuth";
 import { saveTrackingHistory, getTrackingHistory } from "../services/historyService";
 

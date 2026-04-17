@@ -1,6 +1,6 @@
 import { db } from "../lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 
 export interface RateEntry {
   hn_kg: number;
@@ -14,9 +14,11 @@ export interface ShippingSettings {
     [key: string]: RateEntry;
   };
   volume_factor: number;
+  gemini_api_key?: string;
 }
 
 const SETTINGS_DOC_ID = "shipping_rates";
+const CONFIG_DOC_ID = "general_config";
 const COLLECTION_NAME = "system_settings";
 
 export const PRODUCT_CATEGORIES = [
@@ -64,6 +66,30 @@ export const updateShippingSettings = async (settings: ShippingSettings) => {
     await setDoc(docRef, settings);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${COLLECTION_NAME}/${SETTINGS_DOC_ID}`);
+    throw error;
+  }
+};
+
+export const getGeminiApiKey = async (): Promise<string | null> => {
+  try {
+    const docRef = doc(db, COLLECTION_NAME, CONFIG_DOC_ID);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data().gemini_api_key || null;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching Gemini API Key:", error);
+    return null;
+  }
+};
+
+export const updateGeminiApiKey = async (apiKey: string) => {
+  try {
+    const docRef = doc(db, COLLECTION_NAME, CONFIG_DOC_ID);
+    await setDoc(docRef, { gemini_api_key: apiKey }, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `${COLLECTION_NAME}/${CONFIG_DOC_ID}`);
     throw error;
   }
 };

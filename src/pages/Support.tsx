@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Search, MessageSquare, Phone, Mail, MapPin, ChevronRight, HelpCircle, FileQuestion, BookOpen, ShieldCheck, ArrowLeft } from "lucide-react";
-import { cn } from "@/src/lib/utils";
+import { cn } from "../lib/utils";
 
 export default function Support() {
   return (

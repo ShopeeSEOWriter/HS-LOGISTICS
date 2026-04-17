@@ -18,6 +18,7 @@ import ShippingCalculator from "./pages/ShippingCalculator";
 import Auth from "./pages/Auth";
 import UserHistory from "./pages/UserHistory";
 import GoodsTranslator from "./pages/GoodsTranslator";
+import AdminSettings from "./pages/AdminSettings";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { cn } from "./lib/utils";
 import { Navigate } from "react-router-dom";
@@ -52,6 +53,7 @@ function AppContent() {
           <Route path="/ops" element={<ProtectedRoute adminOnly><Dashboard /></ProtectedRoute>} />
           <Route path="/admin/trucks" element={<ProtectedRoute adminOnly><AdminTrucks /></ProtectedRoute>} />
           <Route path="/admin/trucks/:id" element={<ProtectedRoute adminOnly><AdminTruckDetail /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings /></ProtectedRoute>} />
           <Route path="/calculator" element={<ShippingCalculator />} />
           <Route path="/history" element={<ProtectedRoute><UserHistory /></ProtectedRoute>} />
           <Route path="/support" element={<Support />} />

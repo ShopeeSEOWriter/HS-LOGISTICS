@@ -68,7 +68,7 @@ export default function AdminSettings() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h2 className="font-headline text-3xl font-black text-on-surface">Cài đặt cước phí</h2>
           <p className="mt-1 text-sm font-bold opacity-40">Freight Settings / 运费设置</p>

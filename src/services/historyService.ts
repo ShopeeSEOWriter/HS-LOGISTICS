@@ -13,7 +13,7 @@ import {
   limit,
   Timestamp
 } from "firebase/firestore";
-import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 
 const COLLECTION_NAME = "user_tracking_history";
 

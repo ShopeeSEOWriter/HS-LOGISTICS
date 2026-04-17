@@ -7,7 +7,7 @@ import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import AdminSidebar from "../components/AdminSidebar";
 import { format } from "date-fns";
 import { useAuth } from "../hooks/useAuth";
-import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 
 const STATUS_OPTIONS = [
   { label: "Đã nhận tại kho Trung Quốc", subLabel: "已入中国仓", location: "Kho Trung Quốc", color: "bg-blue-400" },
@@ -330,21 +330,21 @@ export default function AdminTruckDetail() {
   return (
     <div className="flex min-h-screen bg-surface">
       <AdminSidebar />
-      <main className="flex-1 p-12 pt-24">
-        <div className="mb-8 flex items-center justify-between">
-            <div className="flex items-center gap-6">
+      <main className="flex-1 p-6 md:p-12 pt-24 md:pt-12 ml-0 md:ml-64">
+        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex flex-wrap items-center gap-4 md:gap-6">
               <button 
                 onClick={() => navigate("/admin/trucks")}
                 className="flex flex-col items-start text-sm font-bold text-on-surface-variant/60 hover:text-primary transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <ChevronLeft className="h-4 w-4" />
-                  <span>Quay lại danh sách xe</span>
+                  <span>Quay lại xe</span>
                 </div>
-                <span className="text-[10px] opacity-60 ml-6">返回车辆列表</span>
+                <span className="text-[10px] opacity-60 ml-6 whitespace-nowrap">返回车辆列表</span>
               </button>
               
-              <div className="h-4 w-[1px] bg-surface-container" />
+              <div className="hidden md:block h-4 w-[1px] bg-surface-container" />
               
               <button 
                 onClick={() => navigate("/")}
@@ -352,15 +352,15 @@ export default function AdminTruckDetail() {
               >
                 <div className="flex items-center gap-2">
                   <ChevronLeft className="h-4 w-4" />
-                  <span>Trang chủ theo dõi</span>
+                  <span>Theo dõi</span>
                 </div>
-                <span className="text-[10px] opacity-60 ml-6">返回跟踪首页</span>
+                <span className="text-[10px] opacity-60 ml-6 whitespace-nowrap">返回跟踪首页</span>
               </button>
             </div>
 
           <button 
             onClick={handleDeleteTruck}
-            className="flex items-center gap-2 rounded-full bg-error/10 px-6 py-2 text-sm font-bold text-error transition-all hover:bg-error/20"
+            className="flex items-center justify-center gap-2 rounded-full bg-error/10 px-6 py-2 text-sm font-bold text-error transition-all hover:bg-error/20"
           >
             <Trash2 className="h-4 w-4" />
             Xóa xe / 删除车辆
@@ -370,16 +370,16 @@ export default function AdminTruckDetail() {
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
           {/* Left: Truck Info & Orders */}
           <div className="lg:col-span-8 space-y-12">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-8">
               <div>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm shrink-0">
                     <Truck className="h-6 w-6" />
                   </div>
                   <div>
-                    <h1 className="font-headline text-4xl font-black tracking-tight">{truck.truck_code}</h1>
-                    <div className="mt-1 flex items-center gap-2">
-                      <p className="text-xs font-bold uppercase tracking-widest opacity-40">Chi tiết xe vận chuyển / 车辆详情</p>
+                    <h1 className="font-headline text-2xl md:text-4xl font-black tracking-tight">{truck.truck_code}</h1>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-40">Chi tiết xe / 车辆详情</p>
                       <span className="h-1 w-1 rounded-full bg-surface-container-highest" />
                       <div className="flex items-center gap-1.5">
                         <MapPin className="h-3 w-3 text-primary" />
@@ -399,9 +399,9 @@ export default function AdminTruckDetail() {
                 </div>
               </div>
               
-              <div className="text-right">
+              <div className="text-left md:text-right">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60">Cập nhật cuối / 最后更新</div>
-                <div className="mt-1 font-headline text-xl font-bold">{safeFormatDate(truck.last_updated)}</div>
+                <div className="mt-1 font-headline text-lg md:text-xl font-bold">{safeFormatDate(truck.last_updated)}</div>
               </div>
             </div>
 
