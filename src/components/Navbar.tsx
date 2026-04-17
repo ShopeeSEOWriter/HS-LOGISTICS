@@ -97,10 +97,12 @@ export default function Navbar() {
                 <span>Hỗ trợ</span>
                 <span className="text-[10px] opacity-70">帮助</span>
               </NavLink>
-              <NavLink to="/admin/trucks" active={location.pathname.startsWith("/admin")}>
-                <span>Quản trị</span>
-                <span className="text-[10px] opacity-70">管理</span>
-              </NavLink>
+              {user?.role === "admin" && (
+                <NavLink to="/admin/trucks" active={location.pathname.startsWith("/admin")}>
+                  <span>Quản trị</span>
+                  <span className="text-[10px] opacity-70">管理</span>
+                </NavLink>
+              )}
             </div>
           )}
         </div>

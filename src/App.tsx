@@ -19,6 +19,7 @@ import Auth from "./pages/Auth";
 import UserHistory from "./pages/UserHistory";
 import GoodsTranslator from "./pages/GoodsTranslator";
 import AdminSettings from "./pages/AdminSettings";
+import MobileBottomNav from "./components/MobileBottomNav";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { cn } from "./lib/utils";
 import { Navigate } from "react-router-dom";
@@ -46,7 +47,7 @@ function AppContent() {
   return (
     <div className={cn("flex min-h-screen flex-col", isOps ? "bg-surface" : "bg-surface")}>
       <Navbar />
-      <div className="flex-grow">
+      <div className="flex-grow pb-24 md:pb-0">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/tracking/:id" element={<TrackingDetail />} />
@@ -61,6 +62,7 @@ function AppContent() {
           <Route path="/admin/translator" element={<ProtectedRoute adminOnly><GoodsTranslator /></ProtectedRoute>} />
         </Routes>
       </div>
+      <MobileBottomNav />
       {!isOps && <Footer />}
     </div>
   );
