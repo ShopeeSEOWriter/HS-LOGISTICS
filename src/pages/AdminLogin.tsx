@@ -3,7 +3,7 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/aut
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { useNavigate } from "react-router-dom";
-import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
+import { handleFirestoreError, OperationType } from "../lib/errorHandler";
 import { Truck, Lock, User, AlertCircle, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 

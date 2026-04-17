@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, where, writeBatch, getDoc, setDoc } from "firebase/firestore";
 import { db, auth } from "../lib/firebase";
-import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
+import { handleFirestoreError, OperationType } from "../lib/errorHandler";
 import * as XLSX from "xlsx";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
