@@ -107,10 +107,32 @@ ${JSON.stringify(batchToTranslate)}`,
         });
         
         const resultText = response.text?.trim() || "[]";
-        let translatedBatch: string[] = JSON.parse(resultText);
+        let translatedBatch: string[] = [];
         
-        // Ensure the AI returned the correct number of items
-        if (translatedBatch.length === batchToTranslate.length) {
+        try {
+          const parsed = JSON.parse(resultText);
+          if (Array.isArray(parsed)) {
+            translatedBatch = parsed;
+          } else if (typeof parsed === 'object' && parsed !== null) {
+            // Find any array property (sometimes AI wraps response)
+            const firstArray = Object.values(parsed).find(v => Array.isArray(v));
+            if (Array.isArray(firstArray)) {
+              translatedBatch = firstArray as string[];
+            }
+          }
+        } catch (parseErr) {
+          console.error("Parse error:", parseErr, "Text:", resultText);
+          // Simple fallback for broken JSON: try to split by commas or newlines if it looks like a list
+          if (resultText.includes("[") && resultText.includes("]")) {
+            const matches = resultText.match(/"([^"]+)"/g);
+            if (matches && matches.length >= batchToTranslate.length) {
+              translatedBatch = matches.map(m => m.replace(/"/g, ''));
+            }
+          }
+        }
+        
+        // Ensure the AI returned results
+        if (translatedBatch.length >= batchToTranslate.length) {
           let translationIndex = 0;
           return texts.map((original, i) => {
             if (needsTranslation[i]) {
@@ -177,7 +199,9 @@ ${JSON.stringify(batchToTranslate)}`,
           "品名", 
           "货物名称",
           "Giao hàng tận nơi",
-          "Tên hàng"
+          "Tên hàng",
+          "TÊN",
+          "HOA DON"
         ].map(p => p.toUpperCase().trim());
 
         let targetColumnIndex = -1;
@@ -210,25 +234,51 @@ ${JSON.stringify(batchToTranslate)}`,
         }
 
         const results = [...rows];
-        const batchSize = 10; 
+        const batchSize = 5; // Smaller batch size for better mobile stability and reliability
         const totalRows = results.length;
+        let successfulTranslations = 0;
+        let totalToTranslate = 0;
+
+        // Count how many we expect to translate for debugging
+        for (let k = headerRowIndex + 1; k < totalRows; k++) {
+          const cellVal = String(results[k][targetColumnIndex] || "");
+          if (/[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(cellVal)) {
+            totalToTranslate++;
+          }
+        }
 
         // Start translation from row AFTER header row
         for (let i = headerRowIndex + 1; i < totalRows; i += batchSize) {
           const end = Math.min(i + batchSize, totalRows);
-          const currentBatch = results.slice(i, end).map(r => String(r[targetColumnIndex] || ""));
+          const currentBatchRows = results.slice(i, end);
+          const currentBatchTexts = currentBatchRows.map(r => String(r[targetColumnIndex] || ""));
           
-          const translatedBatch = await translateBatch(currentBatch);
-          
-          for (let j = 0; j < translatedBatch.length; j++) {
-            if (i + j < totalRows) {
-              results[i + j][targetColumnIndex] = translatedBatch[j];
+          try {
+            const translatedBatch = await translateBatch(currentBatchTexts);
+            
+            for (let j = 0; j < translatedBatch.length; j++) {
+              if (i + j < totalRows) {
+                const original = String(results[i + j][targetColumnIndex] || "");
+                const translated = translatedBatch[j];
+                
+                if (translated && translated !== original) {
+                  successfulTranslations++;
+                }
+                results[i + j][targetColumnIndex] = translated;
+              }
             }
+          } catch (batchErr) {
+            console.error("Batch failed at row", i, batchErr);
           }
           
-          setProgress(Math.round((end / (totalRows - 1)) * 100));
+          setProgress(Math.round((end / totalRows) * 100));
           // Wait longer between batches for mobile stability
           await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+
+        if (totalToTranslate > 0 && successfulTranslations === 0) {
+          console.warn("No translations were performed despite finding Chinese characters.");
+          setError("Ứng dụng không thể dịch được nội dung. Vui lòng kiểm tra lại kết nối mạng hoặc thử lại sau.");
         }
 
         setTranslatedData(results);
