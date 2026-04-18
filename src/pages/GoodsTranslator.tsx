@@ -78,23 +78,37 @@ export default function GoodsTranslator() {
   const translateText = async (text: string) => {
     if (!text || typeof text !== "string") return text;
     
+    // Check if the text contains Chinese characters (\u4e00-\u9fa5)
+    if (!/[\u4e00-\u9fa5]/.test(text)) return text;
+    
     try {
       const ai = await getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Dịch nội dung sau từ tiếng Trung sang tiếng Việt. 
+        contents: `Dịch toàn bộ nội dung sau sang tiếng Việt. 
 Yêu cầu:
-1. Sử dụng thuật ngữ chuyên ngành logistics (Ví dụ: 配件 -> Linh kiện, 汽配 -> Phụ tùng ô tô).
-2. Giữ nguyên các con số và mã hàng (Ví dụ: '14件' dịch thành '14 kiện' hoặc '14 sự kiện').
-3. Chỉ trả về nội dung đã dịch, không giải thích thêm.
+1. Bạn là chuyên gia dịch thuật Logistics Việt - Trung.
+2. Dịch TRIỆT ĐỂ tất cả các từ tiếng Trung sang tiếng Việt (Ví dụ: 醒酒器 -> Bình thở rượu, 钥匙扣 -> Móc chìa khóa).
+    - 配件 -> Linh kiện/Phụ kiện
+    - 汽配 -> Phụ tùng ô tô
+    - 电池 -> Pin
+    - 食品 -> Thực phẩm
+    - 布娃娃 -> Búp bê vải
+3. Giữ nguyên mã số, mã hàng và đơn vị nếu là số (Ví dụ: '14件' -> '14 kiện').
+4. Trả về đúng nội dung đã dịch, KHÔNG giải thích, KHÔNG thêm bớt.
 
-Nội dung: ${text}`,
+Nội dung cần dịch: ${text}`,
+        config: {
+          temperature: 0.1, // Lower temperature for more deterministic results
+        }
       });
       
-      return response.text?.trim() || text;
+      const translated = response.text?.trim();
+      // If the AI didn't return anything or just returned the original, return original
+      return translated || text;
     } catch (err) {
       console.error("Translation error:", err);
-      return text; // Fallback to original text on error
+      return text;
     }
   };
 
@@ -176,9 +190,9 @@ Nội dung: ${text}`,
         for (let i = 1; i < totalRows; i++) {
           const cellValue = results[i][targetColumnIndex];
           if (cellValue) {
-            // Only translate strings that look like Chinese or need translation
-            // For now, we translate everything in that column to be safe
             results[i][targetColumnIndex] = await translateText(String(cellValue));
+            // Small delay to prevent hitting API rate limits too quickly
+            if (i % 5 === 0) await new Promise(resolve => setTimeout(resolve, 300));
           }
           setProgress(Math.round((i / (totalRows - 1)) * 100));
         }
@@ -203,14 +217,35 @@ Nội dung: ${text}`,
       
       // Calculate column widths (AutoFit)
       const colWidths = (translatedData[0] || []).map((_: any, colIndex: number) => {
-        const maxWidth = translatedData.reduce((max: number, row: any[]) => {
-          const cellValue = row[colIndex] ? String(row[colIndex]) : "";
-          return Math.max(max, cellValue.length);
-        }, 10);
-        return { wch: Math.min(maxWidth + 5, 50) }; // Cap width at 50
+        // Base width for headers
+        const headerValue = translatedData[0][colIndex] ? String(translatedData[0][colIndex]) : "";
+        let maxWidth = headerValue.length + 5;
+
+        // Check data rows
+        for (let i = 1; i < Math.min(translatedData.length, 50); i++) {
+          const cellValue = translatedData[i][colIndex] ? String(translatedData[i][colIndex]) : "";
+          if (cellValue.length > maxWidth) {
+            maxWidth = cellValue.length;
+          }
+        }
+        
+        // Special handling for the target column (usually the last or containing translated goods)
+        const isLikelyGoodsColumn = 
+          headerValue.toUpperCase().includes("HANG") || 
+          headerValue.toUpperCase().includes("GOODS") ||
+          colIndex === translatedData[0].length - 1;
+
+        if (isLikelyGoodsColumn) {
+          return { wch: Math.max(maxWidth + 10, 35) }; // Ensure much wider for description
+        }
+        
+        return { wch: Math.max(maxWidth + 2, 12) }; // Default minimum width
       });
       
       worksheet["!cols"] = colWidths;
+
+      // Add simple styling to headers if supported by basic viewers (using bold font is not easy with raw XLSX, 
+      // but we can try to improve structure)
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Translated");
