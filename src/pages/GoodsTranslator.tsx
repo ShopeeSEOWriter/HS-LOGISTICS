@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileText, Download, Loader2, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, RefreshCw, HelpCircle } from "lucide-react";
+import { Upload, FileText, Download, Loader2, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, RefreshCw, HelpCircle, Share2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { GoogleGenAI } from "@google/genai";
 import { cn } from "../lib/utils";
@@ -219,7 +219,7 @@ Nội dung: ${text}`,
       
       // Mobile-friendly download approach
       const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
       
       const link = document.createElement('a');
@@ -236,6 +236,42 @@ Nội dung: ${text}`,
     } catch (err) {
       console.error("Download error:", err);
       setError("Không thể tải xuống tệp. Vui lòng thử nút 'Copy kết quả' phía dưới.");
+    }
+  };
+
+  const [canShare, setCanShare] = useState(false);
+
+  useEffect(() => {
+    if (navigator.share && navigator.canShare) {
+      setCanShare(true);
+    }
+  }, []);
+
+  const shareFile = async () => {
+    if (!translatedData) return;
+
+    try {
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(translatedData);
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Translated");
+      
+      const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const newFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_VN.xlsx";
+      const file = new File([blob], newFileName, { type: blob.type });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Tải xuống tệp đã dịch',
+          text: 'Tải xuống tệp Excel HS Logistics',
+        });
+      } else {
+        downloadFile();
+      }
+    } catch (err) {
+      console.error("Share error:", err);
+      downloadFile();
     }
   };
 
@@ -342,17 +378,36 @@ Nội dung: ${text}`,
                     </p>
                     
                     <div className="flex flex-col w-full gap-4 max-w-sm">
-                      <button
-                        onClick={downloadFile}
-                        className="flex w-full items-center justify-center gap-3 rounded-full bg-emerald-600 py-5 text-lg font-black text-white shadow-xl shadow-emerald-100 transition-all hover:bg-emerald-700 active:scale-95"
-                      >
-                        <Download className="h-6 w-6" />
-                        <span>TẢI XUỐNG NGAY</span>
-                      </button>
+                      {canShare ? (
+                        <button
+                          onClick={shareFile}
+                          className="flex w-full items-center justify-center gap-3 rounded-full bg-emerald-600 py-5 text-lg font-black text-white shadow-xl shadow-emerald-100 transition-all hover:bg-emerald-700 active:scale-95"
+                        >
+                          <Share2 className="h-6 w-6" />
+                          <span>CHIA SẺ / LƯU FILE</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={downloadFile}
+                          className="flex w-full items-center justify-center gap-3 rounded-full bg-emerald-600 py-5 text-lg font-black text-white shadow-xl shadow-emerald-100 transition-all hover:bg-emerald-700 active:scale-95"
+                        >
+                          <Download className="h-6 w-6" />
+                          <span>TẢI XUỐNG NGAY</span>
+                        </button>
+                      )}
+                      
+                      {canShare && (
+                        <button
+                          onClick={downloadFile}
+                          className="text-xs font-bold text-emerald-700/60 hover:text-emerald-700 transition-colors"
+                        >
+                          Hoặc thử tải xuống trực tiếp
+                        </button>
+                      )}
                       
                       <button
                         onClick={resetState}
-                        className="text-sm font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center gap-2"
+                        className="mt-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center gap-2"
                       >
                         <RefreshCw className="h-4 w-4" />
                         <span>Dịch tệp khác / 翻译另一个文件</span>
