@@ -11,9 +11,9 @@ export default function Footer() {
               HS Logistics
             </span>
             <p className="max-w-xs text-xs leading-relaxed text-on-surface-variant">
-              和晟越南货运 - Hệ thống hoàn tất đơn hàng xuyên biên giới tiên tiến kết nối các trung tâm thương mại lớn ở Đông Nam Á.
+              和晟越南货运 - Hệ thống vận chuyển hàng hoá từ Trung Quốc về Việt Nam với 12 năm kinh nghiệm.
               <br />
-              <span className="mt-1 block opacity-70">连接东南亚主要贸易枢纽的先进跨境履行系统。</span>
+              <span className="mt-1 block opacity-70">拥有12年从中国到越南的货物运输经验的领先系统。</span>
             </p>
           </div>
           
@@ -21,10 +21,12 @@ export default function Footer() {
             <FooterSection title="Trung tâm / 枢纽">
               <FooterLink href="#">Kho Đông Hưng / 东兴仓库</FooterLink>
               <FooterLink href="#">Trung tâm Hà Nội / 河内中心</FooterLink>
+              <FooterLink href="#">Kho Sài Gòn / 西贡仓库</FooterLink>
             </FooterSection>
             <FooterSection title="Hỗ trợ / 帮助">
-              <FooterLink href="#">Liên hệ / 联系我们</FooterLink>
-              <FooterLink href="#">Kiến thức / 知识库</FooterLink>
+              <Link to="/support" className="text-xs text-on-surface-variant underline-offset-4 hover:text-primary hover:underline transition-colors">Liên hệ / 联系我们</Link>
+              <FooterLink href="tel:0869863853">Hotline: 0869863853</FooterLink>
+              <FooterLink href="mailto:hslogicticsvietnam@gmail.com">hslogicticsvietnam@gmail.com</FooterLink>
             </FooterSection>
             <FooterSection title="Pháp lý / 法律">
               <FooterLink href="#">Bảo mật / 隐私政策</FooterLink>

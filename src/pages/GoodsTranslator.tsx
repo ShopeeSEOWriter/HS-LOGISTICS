@@ -117,11 +117,41 @@ Nội dung: ${text}`,
           return;
         }
 
-        const headers = rows[0];
-        const targetColumnIndex = headers.indexOf("GIAO HANG TAN NOI");
+        const headers = rows[0] as string[];
+        
+        // Find suitable column for translation
+        const possibleHeaders = [
+          "GIAO HANG TAN NOI", 
+          "TEN HANG", 
+          "TÊN HÀNG", 
+          "TEN_HANG", 
+          "MAT HANG", 
+          "MẶT HÀNG",
+          "GOODS", 
+          "DESCRIPTION", 
+          "NAME", 
+          "品名", 
+          "货物名称"
+        ];
+        
+        let targetColumnIndex = -1;
+        
+        // Try exact match first
+        targetColumnIndex = headers.findIndex(h => 
+          h && typeof h === 'string' && possibleHeaders.includes(h.toUpperCase().trim())
+        );
+        
+        // Try partial match if no exact match
+        if (targetColumnIndex === -1) {
+          targetColumnIndex = headers.findIndex(h => {
+            if (!h || typeof h !== 'string') return false;
+            const upperH = h.toUpperCase();
+            return possibleHeaders.some(p => upperH.includes(p));
+          });
+        }
 
         if (targetColumnIndex === -1) {
-          setError("Không tìm thấy cột 'GIAO HANG TAN NOI'.");
+          setError("Không tìm thấy cột tên hàng (Tên hàng, Mat hang, Goods...). Vui lòng kiểm tra lại file Excel.");
           setLoading(false);
           return;
         }
@@ -132,8 +162,10 @@ Nội dung: ${text}`,
         // Start from index 1 to skip headers
         for (let i = 1; i < totalRows; i++) {
           const cellValue = results[i][targetColumnIndex];
-          if (cellValue && typeof cellValue === "string") {
-            results[i][targetColumnIndex] = await translateText(cellValue);
+          if (cellValue) {
+            // Only translate strings that look like Chinese or need translation
+            // For now, we translate everything in that column to be safe
+            results[i][targetColumnIndex] = await translateText(String(cellValue));
           }
           setProgress(Math.round((i / (totalRows - 1)) * 100));
         }
@@ -152,27 +184,48 @@ Nội dung: ${text}`,
   const downloadFile = () => {
     if (!translatedData) return;
 
-    // Use aoa_to_sheet since translatedData is now an array of arrays
-    const worksheet = XLSX.utils.aoa_to_sheet(translatedData);
-    
-    // Calculate column widths (AutoFit)
-    const colWidths = translatedData[0].map((_: any, colIndex: number) => {
-      const maxWidth = translatedData.reduce((max: number, row: any[]) => {
-        const cellValue = row[colIndex] ? String(row[colIndex]) : "";
-        // Estimate width: handle multi-byte characters (Vietnamese/Chinese) better by counting length
-        // A simple length check is usually enough for basic AutoFit in xlsx
-        return Math.max(max, cellValue.length);
-      }, 10); // Minimum width of 10
-      return { wch: maxWidth + 5 }; // Add padding for better readability
-    });
-    
-    worksheet["!cols"] = colWidths;
+    try {
+      // Use aoa_to_sheet since translatedData is now an array of arrays
+      const worksheet = XLSX.utils.aoa_to_sheet(translatedData);
+      
+      // Calculate column widths (AutoFit)
+      const colWidths = translatedData[0].map((_: any, colIndex: number) => {
+        const maxWidth = translatedData.reduce((max: number, row: any[]) => {
+          const cellValue = row[colIndex] ? String(row[colIndex]) : "";
+          return Math.max(max, cellValue.length);
+        }, 10);
+        return { wch: Math.min(maxWidth + 5, 50) }; // Cap width at 50
+      });
+      
+      worksheet["!cols"] = colWidths;
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Translated Data");
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Translated");
 
-    const newFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_translated.xlsx";
-    XLSX.writeFile(workbook, newFileName);
+      const newFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_VN.xlsx";
+      
+      // For cross-browser/mobile compatibility, we can use a blob approach
+      const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'binary' });
+      const s2ab = (s: string) => {
+        const buf = new ArrayBuffer(s.length);
+        const view = new Uint8Array(buf);
+        for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+        return buf;
+      };
+      
+      const blob = new Blob([s2ab(wbout)], { type: "application/octet-stream" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = newFileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("Download error:", err);
+      setError("Không thể tải xuống tệp. Vui lòng thử lại.");
+    }
   };
 
   const [isApiKeyMissing, setIsApiKeyMissing] = useState(false);

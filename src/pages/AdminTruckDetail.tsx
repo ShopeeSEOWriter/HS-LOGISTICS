@@ -18,7 +18,8 @@ const STATUS_OPTIONS = [
   { label: "Đã thông quan", subLabel: "已完成清关", location: "Biên giới", color: "bg-emerald-400" },
   { label: "Đã về đến Việt Nam", subLabel: "已入越南境", location: "Việt Nam", color: "bg-emerald-500" },
   { label: "Đã về kho Hà Nội", subLabel: "已到河内仓", location: "Hà Nội", color: "bg-indigo-500" },
-  { label: "Đang phân loại tại kho", subLabel: "仓库分拣中", location: "Hà Nội", color: "bg-indigo-600" },
+  { label: "Đã về kho Sài Gòn", subLabel: "已到西贡仓", location: "Sài Gòn", color: "bg-indigo-500" },
+  { label: "Đang phân loại tại kho", subLabel: "仓库分拣中", location: "Việt Nam", color: "bg-indigo-600" },
   { label: "Đang giao hàng", subLabel: "派送中", location: "Nội địa VN", color: "bg-purple-500" },
   { label: "Đã giao hàng", subLabel: "已送达", location: "Người nhận", color: "bg-green-500" },
 ];

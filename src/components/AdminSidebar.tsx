@@ -121,15 +121,6 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps) {
           </Link>
         </nav>
 
-        <div className="mt-auto px-4">
-          <Link to="/admin/trucks" onClick={() => setIsOpen(false)} className="signature-gradient flex w-full flex-col items-center justify-center rounded-2xl py-4 font-bold text-on-primary shadow-xl transition-opacity hover:opacity-90">
-            <div className="flex items-center gap-2">
-              <PlusCircle className="h-4 w-4" />
-              <span className="text-xs">Tạo vận đơn mới</span>
-            </div>
-            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest opacity-80">新建货运单</span>
-          </Link>
-        </div>
       </aside>
     </>
   );

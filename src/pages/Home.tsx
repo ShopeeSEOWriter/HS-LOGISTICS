@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, Truck, ShieldCheck, Map, ArrowRight, ShoppingBag, Store, ShoppingCart, Clock, ChevronRight, Calculator } from "lucide-react";
+import { Package, Truck, ShieldCheck, Map, ArrowRight, Clock, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "../lib/utils";
@@ -67,8 +67,8 @@ export default function Home() {
             transition={{ delay: 0.1 }}
             className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-on-surface-variant"
           >
-            <span className="block font-semibold">Tầm nhìn thời gian thực cho hàng hóa của bạn di chuyển qua hành lang Đông Hưng-Hà Nội.</span>
-            <span className="mt-1 block text-sm opacity-80">为您在东兴-河内走廊运输的货物提供实时追踪。</span>
+            <span className="block font-semibold">Hệ thống vận chuyển hàng hoá từ Trung Quốc về Việt Nam với 12 năm kinh nghiệm.</span>
+            <span className="mt-1 block text-sm opacity-80">拥有12年从中国到越南的货物运输经验的领先系统。</span>
           </motion.p>
 
           {/* Tracking Input Card */}
@@ -127,22 +127,6 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* Quick Links */}
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-8 text-sm">
-            <span className="font-medium text-on-surface-variant/60">Liên kết nhanh / 快速链接:</span>
-            <QuickLink icon={<ShoppingBag className="h-3 w-3" />} label="Taobao" />
-            <QuickLink icon={<Store className="h-3 w-3" />} label="Shopee" />
-            <QuickLink icon={<ShoppingCart className="h-3 w-3" />} label="Lazada" />
-            <Link 
-              to="/calculator" 
-              className="flex items-center gap-2 font-bold text-primary transition-all hover:scale-105"
-            >
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
-                <Calculator className="h-3 w-3" />
-              </div>
-              Tính giá cước / 运费计算
-            </Link>
-          </div>
         </div>
 
         {/* Features Bento */}
@@ -174,17 +158,6 @@ export default function Home() {
         </div>
       </main>
     </div>
-  );
-}
-
-function QuickLink({ icon, label }: { icon: React.ReactNode, label: string }) {
-  return (
-    <a href="#" className="group flex items-center gap-2 font-bold text-on-surface-variant transition-colors hover:text-primary">
-      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-container-high transition-colors group-hover:bg-primary/10 group-hover:text-primary">
-        {icon}
-      </div>
-      {label}
-    </a>
   );
 }
 
