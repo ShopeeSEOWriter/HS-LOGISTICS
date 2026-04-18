@@ -234,50 +234,56 @@ ${JSON.stringify(batchToTranslate)}`,
     }
   };
 
+  const prepareWorkbook = (data: any[][]) => {
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    
+    // Function to calculate visual width (approximate)
+    const getVisualWidth = (val: any) => {
+      if (val === null || val === undefined) return 0;
+      const str = String(val);
+      let width = 0;
+      for (let i = 0; i < str.length; i++) {
+        const code = str.charCodeAt(i);
+        // CJK characters and some symbols are wider
+        if (code > 255) {
+          width += 2.2; 
+        } else if (str[i] === str[i].toUpperCase() && str[i] !== str[i].toLowerCase()) {
+          width += 1.2; // Uppercase letters are wider
+        } else {
+          width += 1;
+        }
+      }
+      return width;
+    };
+
+    const colWidths = (data[0] || []).map((_: any, colIndex: number) => {
+      let maxWidth = 8; // Default minimum
+      
+      // Check every single row to ensure total visibility
+      for (let i = 0; i < data.length; i++) {
+        const width = getVisualWidth(data[i][colIndex]);
+        if (width > maxWidth) {
+          maxWidth = width;
+        }
+      }
+      
+      // Add padding and cap at reasonable maximum
+      return { wch: Math.min(Math.ceil(maxWidth + 5), 100) };
+    });
+    
+    worksheet["!cols"] = colWidths;
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Translated");
+    return workbook;
+  };
+
   const downloadFile = () => {
     if (!translatedData) return;
 
     try {
-      const worksheet = XLSX.utils.aoa_to_sheet(translatedData);
-      
-      // Calculate column widths (AutoFit)
-      const colWidths = (translatedData[0] || []).map((_: any, colIndex: number) => {
-        // Base width for headers
-        const headerValue = translatedData[0][colIndex] ? String(translatedData[0][colIndex]) : "";
-        let maxWidth = headerValue.length + 5;
-
-        // Check data rows
-        for (let i = 1; i < Math.min(translatedData.length, 50); i++) {
-          const cellValue = translatedData[i][colIndex] ? String(translatedData[i][colIndex]) : "";
-          if (cellValue.length > maxWidth) {
-            maxWidth = cellValue.length;
-          }
-        }
-        
-        // Special handling for the target column (usually the last or containing translated goods)
-        const isLikelyGoodsColumn = 
-          headerValue.toUpperCase().includes("HANG") || 
-          headerValue.toUpperCase().includes("GOODS") ||
-          colIndex === translatedData[0].length - 1;
-
-        if (isLikelyGoodsColumn) {
-          return { wch: Math.max(maxWidth + 10, 35) }; // Ensure much wider for description
-        }
-        
-        return { wch: Math.max(maxWidth + 2, 12) }; // Default minimum width
-      });
-      
-      worksheet["!cols"] = colWidths;
-
-      // Add simple styling to headers if supported by basic viewers (using bold font is not easy with raw XLSX, 
-      // but we can try to improve structure)
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Translated");
-
+      const workbook = prepareWorkbook(translatedData);
       const newFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_VN.xlsx";
       
-      // Mobile-friendly download approach
       const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
@@ -288,7 +294,6 @@ ${JSON.stringify(batchToTranslate)}`,
       document.body.appendChild(link);
       link.click();
       
-      // Clean up
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(link);
@@ -311,10 +316,7 @@ ${JSON.stringify(batchToTranslate)}`,
     if (!translatedData) return;
 
     try {
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.aoa_to_sheet(translatedData);
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Translated");
-      
+      const workbook = prepareWorkbook(translatedData);
       const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const newFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_VN.xlsx";
