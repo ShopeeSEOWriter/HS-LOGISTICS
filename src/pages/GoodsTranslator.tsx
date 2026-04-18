@@ -75,10 +75,10 @@ export default function GoodsTranslator() {
     }
   };
 
-  const translateBatch = async (texts: string[], retries = 3): Promise<string[]> => {
+  const translateBatch = async (texts: string[], retries = 5): Promise<string[]> => {
     if (!texts.length) return texts;
     
-    const needsTranslation = texts.map(t => /[\u4e00-\u9fa5]/.test(t));
+    const needsTranslation = texts.map(t => /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(t));
     const batchToTranslate = texts.filter((_, i) => needsTranslation[i]);
     
     if (batchToTranslate.length === 0) return texts;
@@ -89,14 +89,14 @@ export default function GoodsTranslator() {
         const response = await ai.models.generateContent({
           model: "gemini-3-flash-preview",
           contents: `Bạn là chuyên gia dịch thuật Logistics Việt - Trung. 
-DỊCH TRIỆT ĐỂ toàn bộ danh sách các mặt hàng sau sang tiếng Việt. 
+BẠN PHẢI DỊCH 100% CÁC CHỮ CÁI TIẾNG TRUNG SAO ĐÂY SANG TIẾNG VIỆT.
 
-YÊU CẦU QUAN TRỌNG:
-1. Dịch 100% các từ tiếng Trung sang tiếng Việt chuyên ngành (Ví dụ: 醒酒器 -> Bình thở rượu, 配件 -> Linh kiện).
-2. TUYỆT ĐỐI KHÔNG để sót bất kỳ chữ Trung Quốc nào.
-3. Giữ nguyên các mã số và đơn vị định lượng (Ví dụ: 2件 -> 2 kiện).
-4. Phải trả về đúng một mảng JSON có chính xác ${batchToTranslate.length} phần tử.
-5. Định dạng trả về: ["Kết quả 1", "Kết quả 2", ...]
+QUY TẮC BẮT BUỘC:
+1. Dịch TRIỆT ĐỂ toàn bộ nội dung sang tiếng Việt chuyên ngành (Ví dụ: 压缩机 -> Máy nén, 醒酒器 -> Bình thở rượu).
+2. TUYỆT ĐỐI KHÔNG để sót lại bất kỳ chữ Hán nào trong kết quả.
+3. Nếu nội dung có số kèm chữ Hán (Ví dụ: 14件), bạn phải dịch chữ Hán (14 kiện).
+4. Phải trả về đúng mảng JSON có ${batchToTranslate.length} phần tử.
+5. Tuyệt đối không giải thích thêm.
 
 Dữ liệu cần dịch:
 ${JSON.stringify(batchToTranslate)}`,
@@ -163,8 +163,7 @@ ${JSON.stringify(batchToTranslate)}`,
           return;
         }
 
-        const headers = rows[0] as string[];
-        // Find suitable column for translation
+        // Potential logistics headers to search for
         const possibleHeaders = [
           "GIAO HANG TAN NOI", 
           "TEN HANG", 
@@ -179,33 +178,43 @@ ${JSON.stringify(batchToTranslate)}`,
           "货物名称",
           "Giao hàng tận nơi",
           "Tên hàng"
-        ];
-        let targetColumnIndex = -1;
-        
-        // Normalize headers for comparison
-        const normalizedHeaders = headers.map(h => String(h || "").toUpperCase().trim());
-        const normalizedPossible = possibleHeaders.map(p => p.toUpperCase().trim());
+        ].map(p => p.toUpperCase().trim());
 
-        targetColumnIndex = normalizedHeaders.findIndex(h => normalizedPossible.includes(h));
+        let targetColumnIndex = -1;
+        let headerRowIndex = 0;
         
-        if (targetColumnIndex === -1) {
-          // Fallback to partial match
-          targetColumnIndex = normalizedHeaders.findIndex(h => 
-            normalizedPossible.some(p => h.includes(p))
-          );
+        // Scan first 10 rows to find header row effectively
+        for (let r = 0; r < Math.min(rows.length, 10); r++) {
+          const rowValues = rows[r].map(h => String(h || "").toUpperCase().trim());
+          
+          // Look for exact match first
+          targetColumnIndex = rowValues.findIndex(h => possibleHeaders.includes(h));
+          
+          if (targetColumnIndex === -1) {
+            // Look for partial match
+            targetColumnIndex = rowValues.findIndex(h => 
+              possibleHeaders.some(p => h !== "" && (h.includes(p) || p.includes(h)))
+            );
+          }
+
+          if (targetColumnIndex !== -1) {
+            headerRowIndex = r;
+            break;
+          }
         }
 
         if (targetColumnIndex === -1) {
-          setError("Không tìm thấy cột tên hàng. Vui lòng kiểm tra lại file Excel.");
+          setError("Không tìm thấy cột 'Giao hàng tận nơi' hoặc 'Tên hàng'. Vui lòng kiểm tra lại file Excel.");
           setLoading(false);
           return;
         }
 
         const results = [...rows];
-        const batchSize = 10; // Smaller batch for mobile stability
+        const batchSize = 10; 
         const totalRows = results.length;
 
-        for (let i = 1; i < totalRows; i += batchSize) {
+        // Start translation from row AFTER header row
+        for (let i = headerRowIndex + 1; i < totalRows; i += batchSize) {
           const end = Math.min(i + batchSize, totalRows);
           const currentBatch = results.slice(i, end).map(r => String(r[targetColumnIndex] || ""));
           
@@ -218,8 +227,8 @@ ${JSON.stringify(batchToTranslate)}`,
           }
           
           setProgress(Math.round((end / (totalRows - 1)) * 100));
-          // Wait between batches to be nice to the API and mobile network
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Wait longer between batches for mobile stability
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
 
         setTranslatedData(results);
