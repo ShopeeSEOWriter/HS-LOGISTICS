@@ -1,6 +1,6 @@
 import { db } from "../lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { handleFirestoreError, OperationType } from "../lib/errorHandler";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 
 export interface RateEntry {
   hn_kg: number;

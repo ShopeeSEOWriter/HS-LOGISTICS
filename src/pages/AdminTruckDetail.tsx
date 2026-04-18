@@ -7,7 +7,7 @@ import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import AdminSidebar from "../components/AdminSidebar";
 import { format } from "date-fns";
 import { useAuth } from "../hooks/useAuth";
-import { handleFirestoreError, OperationType } from "../lib/errorHandler";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 
 const STATUS_OPTIONS = [
   { label: "Đã nhận tại kho Trung Quốc", subLabel: "已入中国仓", location: "Kho Trung Quốc", color: "bg-blue-400" },

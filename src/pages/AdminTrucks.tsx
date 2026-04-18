@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 import AdminSidebar from "../components/AdminSidebar";
 import { format } from "date-fns";
 import { useAuth } from "../hooks/useAuth";
-import { handleFirestoreError, OperationType } from "../lib/errorHandler";
+import { handleFirestoreError, OperationType } from "@/src/lib/errorHandler";
 
 import BulkUpdateModal from "../components/BulkUpdateModal";
 import ConfirmDialog from "../components/ConfirmDialog";

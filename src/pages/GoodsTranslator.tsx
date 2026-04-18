@@ -185,7 +185,6 @@ Nội dung: ${text}`,
     if (!translatedData) return;
 
     try {
-      // Use aoa_to_sheet since translatedData is now an array of arrays
       const worksheet = XLSX.utils.aoa_to_sheet(translatedData);
       
       // Calculate column widths (AutoFit)
@@ -204,27 +203,31 @@ Nội dung: ${text}`,
 
       const newFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_VN.xlsx";
       
-      // For cross-browser/mobile compatibility, we can use a blob approach
-      const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'binary' });
-      const s2ab = (s: string) => {
-        const buf = new ArrayBuffer(s.length);
-        const view = new Uint8Array(buf);
-        for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
-        return buf;
-      };
-      
-      const blob = new Blob([s2ab(wbout)], { type: "application/octet-stream" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = newFileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Use standard XLSX.writeFile which handles most environment issues
+      XLSX.writeFile(workbook, newFileName);
     } catch (err) {
       console.error("Download error:", err);
-      setError("Không thể tải xuống tệp. Vui lòng thử lại.");
+      setError("Không thể tải xuống tệp. Vui lòng thử nút 'Copy kết quả' phía dưới.");
+    }
+  };
+
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const copyResults = () => {
+    if (!translatedData) return;
+    
+    try {
+      // Create a tab-separated string from the table data
+      const tsv = translatedData.map(row => 
+        row.map((cell: any) => String(cell || "").replace(/\n/g, " ")).join("\t")
+      ).join("\n");
+      
+      navigator.clipboard.writeText(tsv).then(() => {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 3000);
+      });
+    } catch (err) {
+      setError("Không thể copy. Vui lòng thử tải lại trang.");
     }
   };
 
@@ -369,13 +372,40 @@ Nội dung: ${text}`,
                     Đã dịch xong {translatedData.length} dòng dữ liệu.
                   </p>
                   
-                  <button
-                    onClick={downloadFile}
-                    className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 py-4 text-sm font-bold text-white shadow-xl transition-all hover:bg-emerald-700 active:scale-95"
-                  >
-                    <Download className="h-5 w-5" />
-                    <span>Tải xuống tệp đã dịch</span>
-                  </button>
+                  <div className="mt-8 flex flex-col gap-3">
+                    <button
+                      onClick={downloadFile}
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 py-4 text-sm font-bold text-white shadow-xl transition-all hover:bg-emerald-700 active:scale-95"
+                    >
+                      <Download className="h-5 w-5" />
+                      <span>Tải xuống tệp đã dịch</span>
+                    </button>
+
+                    <button
+                      onClick={copyResults}
+                      className={cn(
+                        "flex w-full items-center justify-center gap-2 rounded-full py-3 text-xs font-bold transition-all active:scale-95",
+                        copySuccess 
+                          ? "bg-primary text-white" 
+                          : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest"
+                      )}
+                    >
+                      {copySuccess ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Đã copy! (Dán vào Excel)</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          <span>Copy kết quả (Dán vào Excel)</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[10px] text-on-surface-variant/40 italic">
+                      * Nếu không tải được file, hãy dùng phím Copy rồi dán trực tiếp vào bảng Excel của bạn.
+                    </p>
+                  </div>
                 </div>
               )}
 
