@@ -82,11 +82,10 @@ export default function GoodsTranslator() {
     }
   };
 
-  const translateBatch = async (texts: string[], retries = 5): Promise<string[]> => {
+  const translateBatch = async (texts: string[], retries = 3): Promise<string[]> => {
     if (!texts.length) return texts;
     
-    // Improved strategy: Translate all non-empty strings in the target column
-    // This avoids missing items that might not have triggered the CJK regex but still need translation
+    // Clean and check what needs translation
     const needsTranslation = texts.map(t => t.trim().length > 0);
     const batchToTranslate = texts.filter((_, i) => needsTranslation[i]);
     
@@ -97,20 +96,23 @@ export default function GoodsTranslator() {
         const ai = await getAI();
         const response = await ai.models.generateContent({
           model: "gemini-3-flash-preview",
-          contents: `Bạn là chuyên gia dịch thuật Logistics Việt - Trung cao cấp.
-Nhiệm vụ: DỊCH 100% danh sách tên hàng hóa sau đây sang tiếng Việt.
+          contents: `Bạn là chuyên gia dịch thuật Logistics Trung - Việt cấp cao. 
+Nhiệm vụ: Dịch danh sách tên hàng hóa trong ngành vận chuyển.
 
 QUY TẮC BẮT BUỘC:
-1. DỊCH HẾT MỌI THỨ: Nếu một ô chứa NHIỀU món hàng (ngăn cách bởi dấu phẩy, dấu cộng, dấu gạch chéo, hoặc xuống dòng), bạn PHẢI dịch TẤT CẢ các món đó. Không được bỏ sót bất kỳ chữ nào.
-2. KHÔNG TÓM TẮT: Ví dụ: "Áo, quần, mũ" không được dịch thành "Quần áo". Phải dịch là "Áo, quần, mũ".
-3. GIỮ NGUYÊN CẤU TRÚC: Nếu ô có dạng "A+B+C" hoặc "A,B,C", kết quả dịch cũng phải là "DịchA+DịchB+DịchC" hoặc "DịchA, DịchB, DịchC".
-4. GIỮ NGUYÊN SỐ LƯỢNG: Giữ nguyên các con số và đơn vị tính (Ví dụ: 14件=296KG -> 14 kiện=296KG).
-5. Ô "GIAO HÀNG TẬN NƠI": Đây là cột quan trọng nhất, hãy dịch cực kỳ chi tiết từng phụ kiện, từng món hàng nhỏ nhất bên trong.
-6. ĐỊNH DẠNG: Trả về một MẢNG JSON (JSON Array) có đúng ${batchToTranslate.length} phần tử.
-7. CHỈ TRẢ VỀ JSON: Không giải thích gì thêm.
+1. DỊCH 100% CÁC MÓN HÀNG: Một ô có thể có nhiều loại hàng (ngăn cách bởi dấu phẩy, dấu cộng, dấu gạch chéo, hoặc xuống dòng). Bạn PHẢI dịch TẤT CẢ, không được bỏ sót món nào.
+2. KHÔNG TÓM TẮT: Tuyệt đối không được gộp các món hàng. Ví dụ "Áo, quần, mũ" phải dịch đủ 3 món, không được dịch thành "Quần áo".
+3. ĐƠN VỊ LOGISTICS: 
+   - "件" (Jiàn) -> "kiện"
+   - "个" (Gè) -> "cái"
+   - "台" (Tái) -> "máy/bộ"
+   - "套" (Tào) -> "bộ"
+   - "双" (Shuāng) -> "đôi"
+4. GIỮ NGUYÊN SỐ & CHỮ TIẾNG ANH: Giữ nguyên các con số, đơn vị quốc tế (KG, m3, $, VNĐ), và các mã hàng tiếng Anh.
+5. ĐỊNH DẠNG: Trả về một MẢNG JSON (JSON Array) gồm ${batchToTranslate.length} chuỗi tiếng Việt.
+6. CHỈ TRẢ VỀ JSON: Không giải thích gì thêm.
 
-Dữ liệu nguồn:
-${JSON.stringify(batchToTranslate)}`,
+Dữ liệu: ${JSON.stringify(batchToTranslate)}`,
           config: {
             temperature: 0,
             responseMimeType: "application/json",
@@ -121,50 +123,39 @@ ${JSON.stringify(batchToTranslate)}`,
         let translatedBatch: string[] = [];
         
         try {
-          const parsed = JSON.parse(resultText);
-          if (Array.isArray(parsed)) {
-            translatedBatch = parsed;
-          } else if (typeof parsed === 'object' && parsed !== null) {
-            // Find any array property (sometimes AI wraps response)
-            const firstArray = Object.values(parsed).find(v => Array.isArray(v));
-            if (Array.isArray(firstArray)) {
-              translatedBatch = firstArray as string[];
-            }
+          translatedBatch = JSON.parse(resultText);
+          if (!Array.isArray(translatedBatch)) {
+             // Try to find array in object
+             const firstArray = Object.values(translatedBatch).find(v => Array.isArray(v));
+             if (Array.isArray(firstArray)) translatedBatch = firstArray as string[];
           }
-        } catch (parseErr) {
-          console.error("Parse error:", parseErr, "Text:", resultText);
-          // Simple fallback for broken JSON: try to split by commas or newlines if it looks like a list
-          if (resultText.includes("[") && resultText.includes("]")) {
-            const matches = resultText.match(/"([^"]+)"/g);
-            if (matches && matches.length >= batchToTranslate.length) {
-              translatedBatch = matches.map(m => m.replace(/"/g, ''));
-            }
+        } catch (e) {
+          // Manual fallback if JSON is slightly broken but contains array
+          const matches = resultText.match(/"([^"]+)"/g);
+          if (matches && matches.length >= batchToTranslate.length) {
+            translatedBatch = matches.map(m => m.replace(/"/g, ''));
           }
         }
         
-        // Ensure the AI returned results
-        if (translatedBatch.length >= batchToTranslate.length) {
-          let translationIndex = 0;
+        if (Array.isArray(translatedBatch) && translatedBatch.length >= batchToTranslate.length) {
+          let transIdx = 0;
           return texts.map((original, i) => {
             if (needsTranslation[i]) {
-              return translatedBatch[translationIndex++] || original;
+              return translatedBatch[transIdx++] || original;
             }
             return original;
           });
         }
         
-        // If wrong length, try again
-        console.warn(`Batch size mismatch on attempt ${attempt + 1}. Expected ${batchToTranslate.length}, got ${translatedBatch.length}`);
+        addLog(`Thử lại đợt dịch (${attempt + 1}/${retries})...`);
+        await new Promise(r => setTimeout(r, 1000));
       } catch (err) {
-        console.error(`Batch translation error on attempt ${attempt + 1}:`, err);
-        // Wait before retry
-        if (attempt < retries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-        }
+        console.error("AI Error:", err);
+        await new Promise(r => setTimeout(r, 1000));
       }
     }
     
-    return texts; // Fallback to original if all retries fail
+    return texts;
   };
 
   const processFile = async () => {
@@ -197,48 +188,46 @@ ${JSON.stringify(batchToTranslate)}`,
         const possibleHeaders = [
           "GIAO HANG TAN NOI", 
           "GIAO HÀNG TẬN NƠI",
-          "DỊCH VỤ",
+          "GIAO TAN NOI",
+          "GIAO TẬN NƠI",
+          "NOI NHAN",
+          "NƠI NHẬN",
+          "GIAO HANG",
           "VAN CHUYEN",
           "VẬN CHUYỂN",
-          "TEN HANG", 
-          "TÊN HÀNG", 
-          "TEN_HANG", 
-          "MAT HANG", 
+          "TÊN HÀNG",
+          "TEN HANG",
           "MẶT HÀNG",
-          "GOODS", 
-          "DESCRIPTION", 
-          "NAME", 
-          "品名", 
-          "货物名称",
-          "Giao hàng tận nơi",
-          "Tên hàng",
-          "TÊN",
+          "MAT HANG",
           "HOA DON",
-          "HÓA ĐƠN"
-        ].map(p => p.toUpperCase().trim());
+          "HÓA ĐƠN",
+          "品名",
+          "货物名称"
+        ].map(p => p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
 
         // Scan all sheets to find the best one
         addLog(`Đang tìm kiếm trong ${workbook.SheetNames.length} sheet...`);
         for (const sheetName of workbook.SheetNames) {
           const sheet = workbook.Sheets[sheetName];
-          const sheetRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[][];
+          const sheetRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false }) as any[][];
           if (sheetRows.length === 0) continue;
 
-          // Scan first 15 rows of each sheet
-          for (let r = 0; r < Math.min(sheetRows.length, 15); r++) {
+          // Scan first 20 rows of each sheet
+          for (let r = 0; r < Math.min(sheetRows.length, 20); r++) {
             const row = sheetRows[r];
             if (!Array.isArray(row)) continue;
             
-            const rowValues = row.map(h => String(h || "").toUpperCase().trim());
-            const foundIdx = rowValues.findIndex(h => possibleHeaders.includes(h) || possibleHeaders.some(p => h !== "" && (h.includes(p) || p.includes(h))));
-            
-            if (foundIdx !== -1) {
-              targetSheetName = sheetName;
-              targetColumnIndex = foundIdx;
-              headerRowIndex = r;
-              rows = sheetRows;
-              break;
+            for (let c = 0; c < row.length; c++) {
+              const val = String(row[c] || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+              if (possibleHeaders.some(p => val === p || val.includes(p))) {
+                targetSheetName = sheetName;
+                targetColumnIndex = c;
+                headerRowIndex = r;
+                rows = sheetRows;
+                break;
+              }
             }
+            if (targetColumnIndex !== -1) break;
           }
           if (targetColumnIndex !== -1) break;
         }
@@ -247,26 +236,25 @@ ${JSON.stringify(batchToTranslate)}`,
         let results: any[][] = rows.map(r => Array.isArray(r) ? [...r] : []);
 
         if (results.length === 0 || targetColumnIndex === -1) {
-          addLog("Không tìm thấy header, thử chế độ dò tìm tự động...");
-          // Fallback: look for the column that contains the most Chinese characters in the first 30 rows
-          let maxChineseCount = 0;
+          addLog("Không tìm thấy header tên cột, chuyển sang tìm cột có chữ Trung Quốc...");
           const fallbackSheet = workbook.Sheets[workbook.SheetNames[0]];
-          const fallbackRows = XLSX.utils.sheet_to_json(fallbackSheet, { header: 1, defval: "" }) as any[][];
+          const fallbackRows = XLSX.utils.sheet_to_json(fallbackSheet, { header: 1, defval: "", raw: false }) as any[][];
           results = fallbackRows.map(r => Array.isArray(r) ? [...r] : []);
           
           if (results.length > 0) {
-            const sampleRows = Math.min(results.length, 30);
+            const sampleRows = Math.min(results.length, 50);
             const numCols = Math.max(...results.slice(0, sampleRows).map(r => r.length));
+            let maxScore = 0;
             
             for (let c = 0; c < numCols; c++) {
-              let chineseCount = 0;
+              let score = 0;
               for (let r = 0; r < sampleRows; r++) {
-                if (/[\u4E00-\u9FFF]/.test(String(results[r][c] || ""))) {
-                  chineseCount++;
-                }
+                const text = String(results[r][c] || "");
+                if (/[\u4E00-\u9FFF]/.test(text)) score += 5;
+                if (text.length > 2) score += 1;
               }
-              if (chineseCount > maxChineseCount) {
-                maxChineseCount = chineseCount;
+              if (score > maxScore) {
+                maxScore = score;
                 targetColumnIndex = c;
               }
             }
@@ -280,8 +268,9 @@ ${JSON.stringify(batchToTranslate)}`,
         }
 
         const detectedHeader = String(results[headerRowIndex]?.[targetColumnIndex] || `Cột ${targetColumnIndex + 1}`);
-        setDebugInfo(`Phát hiện: "${detectedHeader}" tại Sheet: "${targetSheetName}"`);
-        addLog(`Đã xác định cột: ${detectedHeader}`);
+        const logMsg = `Xác định cột dịch: "${detectedHeader}" (Cột ${targetColumnIndex + 1})`;
+        setDebugInfo(logMsg);
+        addLog(logMsg);
 
         const totalRows = results.length;
         let successfulTranslations = 0;
@@ -295,12 +284,14 @@ ${JSON.stringify(batchToTranslate)}`,
           }
         }
         
-        addLog(`Phát hiện ${totalToTranslate} ô cần dịch.`);
-        const batchSize = 5;
+        addLog(`Cần dịch ${totalToTranslate} ô.`);
+        const batchSize = 4; // Smaller batch for mobile stability
 
         // Start translation from row AFTER header row
         for (let i = headerRowIndex + 1; i < totalRows; i += batchSize) {
           const end = Math.min(i + batchSize, totalRows);
+          addLog(`Đang dịch dòng ${i} đến ${end}...`);
+          
           const currentBatchRows = results.slice(i, end);
           const currentBatchTexts = currentBatchRows.map(r => String(r[targetColumnIndex] || ""));
           
@@ -312,20 +303,18 @@ ${JSON.stringify(batchToTranslate)}`,
                 const original = String(results[i + j][targetColumnIndex] || "");
                 const translated = translatedBatch[j];
                 
-                if (translated && translated !== original && translated.trim() !== "") {
+                if (translated && translated.trim() !== "" && translated !== original) {
                   successfulTranslations++;
                   results[i + j][targetColumnIndex] = translated;
                 }
               }
             }
           } catch (batchErr) {
-            console.error("Batch failed at row", i, batchErr);
-            addLog(`Lỗi tại dòng ${i + 1}.`);
+            console.error("Batch failed", batchErr);
           }
           
           setProgress(Math.round((end / totalRows) * 100));
-          // Wait longer between batches for mobile stability
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          await new Promise(resolve => setTimeout(resolve, 1200));
         }
 
         if (totalToTranslate > 0 && successfulTranslations === 0) {
