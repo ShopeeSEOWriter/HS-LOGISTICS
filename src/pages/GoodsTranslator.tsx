@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileText, Download, Loader2, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import { Upload, FileText, Download, Loader2, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, RefreshCw, HelpCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { GoogleGenAI } from "@google/genai";
 import { cn } from "../lib/utils";
@@ -35,7 +35,17 @@ export default function GoodsTranslator() {
   const [translatedData, setTranslatedData] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [originalFileName, setOriginalFileName] = useState("");
+  const [isCompleted, setIsCompleted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const resetState = () => {
+    setFile(null);
+    setTranslatedData(null);
+    setProgress(0);
+    setIsCompleted(false);
+    setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -44,6 +54,7 @@ export default function GoodsTranslator() {
       setOriginalFileName(selectedFile.name);
       setError(null);
       setTranslatedData(null);
+      setIsCompleted(false);
     }
   };
 
@@ -53,12 +64,14 @@ export default function GoodsTranslator() {
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    if (isCompleted) return;
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
       setFile(droppedFile);
       setOriginalFileName(droppedFile.name);
       setError(null);
       setTranslatedData(null);
+      setIsCompleted(false);
     }
   };
 
@@ -171,6 +184,7 @@ Nội dung: ${text}`,
         }
 
         setTranslatedData(results);
+        setIsCompleted(true);
         setLoading(false);
       };
       reader.readAsArrayBuffer(file);
@@ -188,7 +202,7 @@ Nội dung: ${text}`,
       const worksheet = XLSX.utils.aoa_to_sheet(translatedData);
       
       // Calculate column widths (AutoFit)
-      const colWidths = translatedData[0].map((_: any, colIndex: number) => {
+      const colWidths = (translatedData[0] || []).map((_: any, colIndex: number) => {
         const maxWidth = translatedData.reduce((max: number, row: any[]) => {
           const cellValue = row[colIndex] ? String(row[colIndex]) : "";
           return Math.max(max, cellValue.length);
@@ -203,8 +217,22 @@ Nội dung: ${text}`,
 
       const newFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_VN.xlsx";
       
-      // Use standard XLSX.writeFile which handles most environment issues
-      XLSX.writeFile(workbook, newFileName);
+      // Mobile-friendly download approach
+      const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', newFileName);
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+      }, 100);
     } catch (err) {
       console.error("Download error:", err);
       setError("Không thể tải xuống tệp. Vui lòng thử nút 'Copy kết quả' phía dưới.");
@@ -280,74 +308,115 @@ Nội dung: ${text}`,
           </div>
 
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            {/* Upload Section */}
+            {/* Action Section (Upload or Download) */}
             <div className="space-y-6">
               <div
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !isCompleted && fileInputRef.current?.click()}
                 className={cn(
-                  "group relative flex cursor-pointer flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed border-surface-container-highest bg-surface-container-lowest p-12 transition-all hover:border-primary/40 hover:bg-primary/5",
-                  file && "border-primary/40 bg-primary/5"
+                  "group relative flex cursor-pointer flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed p-10 transition-all min-h-[400px]",
+                  isCompleted 
+                    ? "border-emerald-500/50 bg-emerald-50/50 cursor-default" 
+                    : (file ? "border-primary/40 bg-primary/5" : "border-surface-container-highest bg-surface-container-lowest hover:border-primary/40 hover:bg-primary/5")
                 )}
               >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept=".xlsx, .xls"
-                  className="hidden"
-                />
+                {!isCompleted && (
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".xlsx, .xls"
+                    className="hidden"
+                  />
+                )}
                 
-                <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-surface-container shadow-inner group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                  {file ? <FileText className="h-10 w-10" /> : <Upload className="h-10 w-10" />}
-                </div>
-
-                <h3 className="text-lg font-bold text-on-surface">
-                  {file ? file.name : "Kéo thả hoặc chọn tệp Excel"}
-                </h3>
-                <p className="mt-2 text-center text-sm text-on-surface-variant/60">
-                  Hỗ trợ định dạng .xlsx, .xls
-                  <br />
-                  <span className="text-xs italic">Cần có cột "GIAO HANG TAN NOI"</span>
-                </p>
-              </div>
-
-              <button
-                onClick={processFile}
-                disabled={!file || loading}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-4 text-sm font-bold text-on-primary shadow-xl transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Đang xử lý...</span>
-                  </>
+                {isCompleted ? (
+                  <div className="animate-in fade-in zoom-in duration-500 flex flex-col items-center text-center">
+                    <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-200">
+                      <Download className="h-12 w-12" />
+                    </div>
+                    <h3 className="text-2xl font-black text-on-surface mb-2">Đã sẵn sàng!</h3>
+                    <p className="text-sm text-emerald-600 font-bold mb-8">
+                      {originalFileName.replace(/\.[^/.]+$/, "")}_VN.xlsx
+                    </p>
+                    
+                    <div className="flex flex-col w-full gap-4 max-w-sm">
+                      <button
+                        onClick={downloadFile}
+                        className="flex w-full items-center justify-center gap-3 rounded-full bg-emerald-600 py-5 text-lg font-black text-white shadow-xl shadow-emerald-100 transition-all hover:bg-emerald-700 active:scale-95"
+                      >
+                        <Download className="h-6 w-6" />
+                        <span>TẢI XUỐNG NGAY</span>
+                      </button>
+                      
+                      <button
+                        onClick={resetState}
+                        className="text-sm font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Dịch tệp khác / 翻译另一个文件</span>
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <>
-                    <span>Bắt đầu dịch thuật</span>
-                    <ArrowRight className="h-4 w-4" />
+                    <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-surface-container shadow-inner group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                      {file ? <FileText className="h-10 w-10 text-primary" /> : <Upload className="h-10 w-10" />}
+                    </div>
+
+                    <h3 className="text-lg font-bold text-on-surface text-center">
+                      {file ? file.name : "Kéo thả hoặc chọn tệp Excel"}
+                    </h3>
+                    <p className="mt-2 text-center text-sm text-on-surface-variant/60">
+                      Hỗ trợ định dạng .xlsx, .xls
+                      <br />
+                      <span className="text-xs italic">Tự động nhận diện cột Tên hàng</span>
+                    </p>
                   </>
                 )}
-              </button>
+              </div>
+
+              {!isCompleted && (
+                <button
+                  onClick={processFile}
+                  disabled={!file || loading}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-5 text-lg font-black text-on-primary shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                      <span>Đang xử lý {progress}%...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>BẮT ĐẦU DỊCH THUẬT</span>
+                      <ArrowRight className="h-5 w-5" />
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
-            {/* Status & Result Section */}
-            <div className="flex flex-col justify-center rounded-[2.5rem] bg-surface-container-low p-10 border border-surface-container">
+            {/* Status & Side Result Section (Hidden or mini on mobile when completed, but good for copy fallback) */}
+            <div className={cn(
+              "flex flex-col justify-center rounded-[2.5rem] bg-surface-container-low p-10 border border-surface-container transition-all",
+              isCompleted && "md:opacity-100 opacity-60"
+            )}>
               {!loading && !translatedData && !error && (
                 <div className="text-center">
                   <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-surface-container mx-auto">
-                    <Loader2 className="h-8 w-8 text-on-surface-variant/20" />
+                    <HelpCircle className="h-8 w-8 text-on-surface-variant/20" />
                   </div>
-                  <h3 className="text-lg font-bold text-on-surface-variant/40">Chờ tải tệp...</h3>
-                  <p className="mt-2 text-xs text-on-surface-variant/30">Hệ thống sẽ tự động dịch sau khi bạn nhấn nút bắt đầu.</p>
+                  <h3 className="text-lg font-bold text-on-surface-variant/40">Chờ lệnh...</h3>
+                  <p className="mt-2 text-xs text-on-surface-variant/30">Kết quả và phương thức dự phòng sẽ xuất hiện tại đây.</p>
                 </div>
               )}
 
               {loading && (
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-primary uppercase tracking-widest">Đang dịch... {progress}%</span>
+                    <span className="text-sm font-bold text-primary uppercase tracking-widest">Đang tải dữ liệu... {progress}%</span>
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   </div>
                   <div className="h-3 w-full overflow-hidden rounded-full bg-surface-container-highest">
@@ -357,7 +426,7 @@ Nội dung: ${text}`,
                     />
                   </div>
                   <p className="text-center text-xs text-on-surface-variant/60 italic">
-                    Sử dụng Gemini AI để dịch thuật ngữ chuyên ngành logistics...
+                    AI đang phân tích và dịch thuật ngữ chuyên ngành...
                   </p>
                 </div>
               )}
@@ -367,24 +436,16 @@ Nội dung: ${text}`,
                   <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 mx-auto">
                     <CheckCircle2 className="h-10 w-10" />
                   </div>
-                  <h3 className="text-xl font-black text-on-surface">Dịch thuật hoàn tất!</h3>
-                  <p className="mt-2 text-sm text-on-surface-variant/60">
-                    Đã dịch xong {translatedData.length} dòng dữ liệu.
+                  <h3 className="text-xl font-black text-on-surface">Kết Quả Phụ</h3>
+                  <p className="mt-2 text-sm text-on-surface-variant/60 mb-8">
+                    Nếu phím tải về bị chặn bởi trình duyệt web hoặc ứng dụng mạng xã hội (Zalo, WeChat, Facebook), hãy dùng phím Copy phía dưới.
                   </p>
                   
-                  <div className="mt-8 flex flex-col gap-3">
-                    <button
-                      onClick={downloadFile}
-                      className="flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 py-4 text-sm font-bold text-white shadow-xl transition-all hover:bg-emerald-700 active:scale-95"
-                    >
-                      <Download className="h-5 w-5" />
-                      <span>Tải xuống tệp đã dịch</span>
-                    </button>
-
+                  <div className="flex flex-col gap-3">
                     <button
                       onClick={copyResults}
                       className={cn(
-                        "flex w-full items-center justify-center gap-2 rounded-full py-3 text-xs font-bold transition-all active:scale-95",
+                        "flex w-full items-center justify-center gap-2 rounded-full py-4 text-sm font-bold transition-all active:scale-95 shadow-md",
                         copySuccess 
                           ? "bg-primary text-white" 
                           : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest"
@@ -392,18 +453,18 @@ Nội dung: ${text}`,
                     >
                       {copySuccess ? (
                         <>
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span>Đã copy! (Dán vào Excel)</span>
+                          <CheckCircle2 className="h-5 w-5" />
+                          <span>ĐÃ SAO CHÉP KẾT QUẢ</span>
                         </>
                       ) : (
                         <>
-                          <FileText className="h-4 w-4" />
-                          <span>Copy kết quả (Dán vào Excel)</span>
+                          <FileText className="h-5 w-5" />
+                          <span>SAO CHÉP KẾT QUẢ</span>
                         </>
                       )}
                     </button>
                     <p className="text-[10px] text-on-surface-variant/40 italic">
-                      * Nếu không tải được file, hãy dùng phím Copy rồi dán trực tiếp vào bảng Excel của bạn.
+                      Dán trực tiếp vào ứng dụng Excel hoặc ghi chú trên điện thoại của bạn.
                     </p>
                   </div>
                 </div>
