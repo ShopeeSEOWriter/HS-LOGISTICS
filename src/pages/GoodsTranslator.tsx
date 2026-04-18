@@ -89,14 +89,14 @@ export default function GoodsTranslator() {
         const response = await ai.models.generateContent({
           model: "gemini-3-flash-preview",
           contents: `Bạn là chuyên gia dịch thuật Logistics Việt - Trung. 
-BẠN PHẢI DỊCH 100% CÁC CHỮ CÁI TIẾNG TRUNG SAO ĐÂY SANG TIẾNG VIỆT.
+BẠN PHẢI DỊCH 100% TẤT CẢ TÊN HÀNG TRONG DANH SÁCH SAU SANG TIẾNG VIỆT.
 
 QUY TẮC BẮT BUỘC:
-1. Dịch TRIỆT ĐỂ toàn bộ nội dung sang tiếng Việt chuyên ngành (Ví dụ: 压缩机 -> Máy nén, 醒酒器 -> Bình thở rượu).
-2. TUYỆT ĐỐI KHÔNG để sót lại bất kỳ chữ Hán nào trong kết quả.
-3. Nếu nội dung có số kèm chữ Hán (Ví dụ: 14件), bạn phải dịch chữ Hán (14 kiện).
-4. Phải trả về đúng mảng JSON có ${batchToTranslate.length} phần tử.
-5. Tuyệt đối không giải thích thêm.
+1. Dịch TRIỆT ĐỂ toàn bộ nội dung. Nếu 1 ô có NHIỀU TÊN HÀNG, bạn phải dịch HẾT TẤT CẢ các tên hàng đó, không được tóm tắt hay lược bỏ bất kỳ món nào.
+2. TUYỆT ĐỐI KHÔNG để sót chữ Hán nào (Ví dụ: 压缩机, 醒酒器 -> Máy nén, Bình thở rượu).
+3. Giữ nguyên các định dạng số và đơn vị (Ví dụ: 14件=296KG -> 14 kiện=296KG).
+4. Kết quả trả về PHẢI là một mảng JSON có đúng ${batchToTranslate.length} phần tử.
+5. Tuyệt đối không giải thích, không thêm văn bản thừa.
 
 Dữ liệu cần dịch:
 ${JSON.stringify(batchToTranslate)}`,
