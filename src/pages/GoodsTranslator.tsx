@@ -85,11 +85,17 @@ export default function GoodsTranslator() {
   const translateBatch = async (texts: string[], retries = 3): Promise<string[]> => {
     if (!texts.length) return texts;
     
-    // Clean and check what needs translation
-    const needsTranslation = texts.map(t => t.trim().length > 0);
+    // Clean and check what needs translation (avoid translating things that look already translated if possible, 
+    // but here we must translate all per user request)
+    const needsTranslation = texts.map(t => {
+      const trimmed = t.trim();
+      return trimmed.length > 0;
+    });
     const batchToTranslate = texts.filter((_, i) => needsTranslation[i]);
     
     if (batchToTranslate.length === 0) return texts;
+
+    addLog(`Đang gửi ${batchToTranslate.length} mục hàng lên AI...`);
 
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
@@ -97,22 +103,26 @@ export default function GoodsTranslator() {
         const response = await ai.models.generateContent({
           model: "gemini-3-flash-preview",
           contents: `Bạn là chuyên gia dịch thuật Logistics Trung - Việt cấp cao. 
-Nhiệm vụ: Dịch danh sách tên hàng hóa trong ngành vận chuyển.
+Nhiệm vụ: Dịch danh sách tên hàng hóa trong ngành vận chuyển từ tiếng Trung sang tiếng Việt.
 
 QUY TẮC BẮT BUỘC:
-1. DỊCH 100% CÁC MÓN HÀNG: Một ô có thể có nhiều loại hàng (ngăn cách bởi dấu phẩy, dấu cộng, dấu gạch chéo, hoặc xuống dòng). Bạn PHẢI dịch TẤT CẢ, không được bỏ sót món nào.
-2. KHÔNG TÓM TẮT: Tuyệt đối không được gộp các món hàng. Ví dụ "Áo, quần, mũ" phải dịch đủ 3 món, không được dịch thành "Quần áo".
-3. ĐƠN VỊ LOGISTICS: 
+1. DỊCH 100% CÁC MÓN HÀNG: Một ô có thể có nhiều loại hàng (ngăn cách bởi dấu phẩy, dấu cộng, dấu gạch chéo, hoặc xuống dòng). Bạn PHẢI dịch TẤT CẢ, không được bỏ sót món nào. 
+   - Ví dụ: "配件, 衣服" -> "Linh kiện, Quần áo"
+   - Ví dụ: "配件30个+配件10个" -> "Linh kiện 30 cái + Linh kiện 10 cái"
+2. ĐỐI VỚI CỘT "GIAO HÀNG TẬN NƠI" (DELIVERY): Nếu ô có ghi địa chỉ hoặc ghi chú giao hàng, hãy dịch sát nghĩa. Nếu là tên hàng hóa thì dịch theo quy tắc hàng hóa.
+3. KHÔNG TÓM TẮT: Tuyệt đối không được gộp các món hàng. Ví dụ "Áo, quần, mũ" phải dịch đủ 3 món, không được dịch thành "Quần áo".
+4. ĐƠN VỊ LOGISTICS: 
    - "件" (Jiàn) -> "kiện"
    - "个" (Gè) -> "cái"
    - "台" (Tái) -> "máy/bộ"
    - "套" (Tào) -> "bộ"
    - "双" (Shuāng) -> "đôi"
-4. GIỮ NGUYÊN SỐ & CHỮ TIẾNG ANH: Giữ nguyên các con số, đơn vị quốc tế (KG, m3, $, VNĐ), và các mã hàng tiếng Anh.
-5. ĐỊNH DẠNG: Trả về một MẢNG JSON (JSON Array) gồm ${batchToTranslate.length} chuỗi tiếng Việt.
-6. CHỈ TRẢ VỀ JSON: Không giải thích gì thêm.
+   - "箱" (Xiāng) -> "thùng"
+5. GIỮ NGUYÊN SỐ & CHỮ TIẾNG ANH: Giữ nguyên các con số, đơn vị quốc tế (KG, m3, $, VNĐ), và các mã hàng tiếng Anh (như HS code, Model).
+6. ĐỊNH DẠNG: Trả về một MẢNG JSON (JSON Array) gồm ĐÚNG ${batchToTranslate.length} chuỗi tiếng Việt theo thứ tự.
+7. CHỈ TRẢ VỀ JSON: Không giải thích gì thêm, không bọc trong Markdown.
 
-Dữ liệu: ${JSON.stringify(batchToTranslate)}`,
+Dữ liệu nguồn cần dịch: ${JSON.stringify(batchToTranslate)}`,
           config: {
             temperature: 0,
             responseMimeType: "application/json",
@@ -123,17 +133,29 @@ Dữ liệu: ${JSON.stringify(batchToTranslate)}`,
         let translatedBatch: string[] = [];
         
         try {
-          translatedBatch = JSON.parse(resultText);
+          // Cleanup markdown blocks if present
+          const jsonMatch = resultText.match(/```json\s*([\s\S]*?)\s*```/) || 
+                           resultText.match(/```\s*([\s\S]*?)\s*```/) ||
+                           [null, resultText];
+          const cleanJson = (jsonMatch[1] || resultText).trim();
+          
+          translatedBatch = JSON.parse(cleanJson);
           if (!Array.isArray(translatedBatch)) {
              // Try to find array in object
              const firstArray = Object.values(translatedBatch).find(v => Array.isArray(v));
              if (Array.isArray(firstArray)) translatedBatch = firstArray as string[];
           }
         } catch (e) {
-          // Manual fallback if JSON is slightly broken but contains array
+          addLog("Lỗi phân tích JSON, đang thử trích xuất chuỗi...");
           const matches = resultText.match(/"([^"]+)"/g);
           if (matches && matches.length >= batchToTranslate.length) {
             translatedBatch = matches.map(m => m.replace(/"/g, ''));
+          } else {
+             // Second attempt: split by commas if it looks like a flat list
+             const possibleList = resultText.replace(/[\[\]]/g, '').split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+             if (possibleList.length >= batchToTranslate.length) {
+                translatedBatch = possibleList.map(s => s.trim().replace(/^"|"$/g, ''));
+             }
           }
         }
         
@@ -147,11 +169,13 @@ Dữ liệu: ${JSON.stringify(batchToTranslate)}`,
           });
         }
         
-        addLog(`Thử lại đợt dịch (${attempt + 1}/${retries})...`);
-        await new Promise(r => setTimeout(r, 1000));
-      } catch (err) {
-        console.error("AI Error:", err);
-        await new Promise(r => setTimeout(r, 1000));
+        addLog(`Kết quả AI không khớp số lượng mục. Thử lại (${attempt + 1}/${retries})...`);
+        await new Promise(r => setTimeout(r, 2000));
+      } catch (err: any) {
+        addLog(`Lỗi AI: ${err.message || "Không xác định"}. Thử lại...`);
+        // If it's a rate limit error, wait longer
+        const waitTime = err.message?.includes("429") ? 5000 : 2000;
+        await new Promise(r => setTimeout(r, waitTime));
       }
     }
     
@@ -162,6 +186,7 @@ Dữ liệu: ${JSON.stringify(batchToTranslate)}`,
     if (!file) return;
 
     try {
+      addLog("Đang kiểm tra kết cấu hệ thống...");
       await getAI();
     } catch (err: any) {
       setError(err.message);
@@ -173,165 +198,225 @@ Dữ liệu: ${JSON.stringify(batchToTranslate)}`,
     setError(null);
 
     try {
-      addLog("Bắt đầu đọc file...");
+      addLog("Bắt đầu đọc file Excel...");
       const reader = new FileReader();
+      
+      reader.onerror = () => {
+        setError("Lỗi khi đọc tệp tin. Vui lòng thử lại.");
+        setLoading(false);
+      };
+
       reader.onload = async (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        
-        let targetSheetName = workbook.SheetNames[0];
-        let targetColumnIndex = -1;
-        let headerRowIndex = 0;
-        let rows: any[][] = [];
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          
+          let targetSheetName = workbook.SheetNames[0];
+          let targetColumnIndex = -1;
+          let headerRowIndex = 0;
+          let rows: any[][] = [];
 
-        // Potential logistics headers to search for
-        const possibleHeaders = [
-          "GIAO HANG TAN NOI", 
-          "GIAO HÀNG TẬN NƠI",
-          "GIAO TAN NOI",
-          "GIAO TẬN NƠI",
-          "NOI NHAN",
-          "NƠI NHẬN",
-          "GIAO HANG",
-          "VAN CHUYEN",
-          "VẬN CHUYỂN",
-          "TÊN HÀNG",
-          "TEN HANG",
-          "MẶT HÀNG",
-          "MAT HANG",
-          "HOA DON",
-          "HÓA ĐƠN",
-          "品名",
-          "货物名称"
-        ].map(p => p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
+          // Potential logistics headers to search for
+          // We split them into priority groups
+          const priorityHeaders = [
+            "GIAO HANG TAN NOI", 
+            "GIAO HÀNG TẬN NƠI",
+            "GIAO TAN NOI",
+            "GIAO TẬN NƠI",
+            "NOI NHAN",
+            "NƠI NHẬN"
+          ].map(p => p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
 
-        // Scan all sheets to find the best one
-        addLog(`Đang tìm kiếm trong ${workbook.SheetNames.length} sheet...`);
-        for (const sheetName of workbook.SheetNames) {
-          const sheet = workbook.Sheets[sheetName];
-          const sheetRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false }) as any[][];
-          if (sheetRows.length === 0) continue;
+          const secondaryHeaders = [
+            "TÊN HÀNG",
+            "TEN HANG",
+            "MẶT HÀNG",
+            "MAT HANG",
+            "品名",
+            "货物名称"
+          ].map(p => p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
 
-          // Scan first 20 rows of each sheet
-          for (let r = 0; r < Math.min(sheetRows.length, 20); r++) {
-            const row = sheetRows[r];
-            if (!Array.isArray(row)) continue;
-            
-            for (let c = 0; c < row.length; c++) {
-              const val = String(row[c] || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-              if (possibleHeaders.some(p => val === p || val.includes(p))) {
-                targetSheetName = sheetName;
-                targetColumnIndex = c;
-                headerRowIndex = r;
-                rows = sheetRows;
-                break;
+          // Scan all sheets to find the best one
+          addLog(`Tìm thấy ${workbook.SheetNames.length} sheet. Đang quét dữ liệu...`);
+          
+          // Phase 1: Try to find priority headers
+          for (const sheetName of workbook.SheetNames) {
+            const sheet = workbook.Sheets[sheetName];
+            const sheetRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false }) as any[][];
+            if (sheetRows.length === 0) continue;
+
+            for (let r = 0; r < Math.min(sheetRows.length, 40); r++) {
+              const row = sheetRows[r];
+              if (!Array.isArray(row)) continue;
+              for (let c = 0; c < row.length; c++) {
+                const rawVal = String(row[c] || "");
+                const val = rawVal.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                if (priorityHeaders.some(p => val === p || val.includes(p))) {
+                  targetSheetName = sheetName;
+                  targetColumnIndex = c;
+                  headerRowIndex = r;
+                  rows = sheetRows;
+                  break;
+                }
               }
+              if (targetColumnIndex !== -1) break;
             }
             if (targetColumnIndex !== -1) break;
           }
-          if (targetColumnIndex !== -1) break;
-        }
 
-        // Deep copy rows and filter objects to arrays if needed
-        let results: any[][] = rows.map(r => Array.isArray(r) ? [...r] : []);
+          // Phase 2: If no priority header, try secondary headers
+          if (targetColumnIndex === -1) {
+            for (const sheetName of workbook.SheetNames) {
+              const sheet = workbook.Sheets[sheetName];
+              const sheetRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false }) as any[][];
+              if (sheetRows.length === 0) continue;
 
-        if (results.length === 0 || targetColumnIndex === -1) {
-          addLog("Không tìm thấy header tên cột, chuyển sang tìm cột có chữ Trung Quốc...");
-          const fallbackSheet = workbook.Sheets[workbook.SheetNames[0]];
-          const fallbackRows = XLSX.utils.sheet_to_json(fallbackSheet, { header: 1, defval: "", raw: false }) as any[][];
-          results = fallbackRows.map(r => Array.isArray(r) ? [...r] : []);
-          
-          if (results.length > 0) {
-            const sampleRows = Math.min(results.length, 50);
-            const numCols = Math.max(...results.slice(0, sampleRows).map(r => r.length));
-            let maxScore = 0;
-            
-            for (let c = 0; c < numCols; c++) {
-              let score = 0;
-              for (let r = 0; r < sampleRows; r++) {
-                const text = String(results[r][c] || "");
-                if (/[\u4E00-\u9FFF]/.test(text)) score += 5;
-                if (text.length > 2) score += 1;
+              for (let r = 0; r < Math.min(sheetRows.length, 40); r++) {
+                const row = sheetRows[r];
+                if (!Array.isArray(row)) continue;
+                for (let c = 0; c < row.length; c++) {
+                  const rawVal = String(row[c] || "");
+                  const val = rawVal.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                  if (secondaryHeaders.some(p => val === p || val.includes(p))) {
+                    targetSheetName = sheetName;
+                    targetColumnIndex = c;
+                    headerRowIndex = r;
+                    rows = sheetRows;
+                    break;
+                  }
+                }
+                if (targetColumnIndex !== -1) break;
               }
-              if (score > maxScore) {
-                maxScore = score;
-                targetColumnIndex = c;
-              }
+              if (targetColumnIndex !== -1) break;
             }
           }
-        }
 
-        if (results.length === 0 || targetColumnIndex === -1) {
-          setError("Không tìm thấy cột 'Giao hàng tận nơi' hoặc dữ liệu hàng hóa. Vui lòng kiểm tra lại file Excel.");
-          setLoading(false);
-          return;
-        }
+          // Deep copy rows and filter objects to arrays if needed
+          let results: any[][] = rows.map(r => Array.isArray(r) ? [...r] : []);
 
-        const detectedHeader = String(results[headerRowIndex]?.[targetColumnIndex] || `Cột ${targetColumnIndex + 1}`);
-        const logMsg = `Xác định cột dịch: "${detectedHeader}" (Cột ${targetColumnIndex + 1})`;
-        setDebugInfo(logMsg);
-        addLog(logMsg);
-
-        const totalRows = results.length;
-        let successfulTranslations = 0;
-        let totalToTranslate = 0;
-
-        // Count non-empty cells after header
-        for (let k = headerRowIndex + 1; k < totalRows; k++) {
-          const cellVal = String(results[k][targetColumnIndex] || "").trim();
-          if (cellVal.length > 0) {
-            totalToTranslate++;
-          }
-        }
-        
-        addLog(`Cần dịch ${totalToTranslate} ô.`);
-        const batchSize = 4; // Smaller batch for mobile stability
-
-        // Start translation from row AFTER header row
-        for (let i = headerRowIndex + 1; i < totalRows; i += batchSize) {
-          const end = Math.min(i + batchSize, totalRows);
-          addLog(`Đang dịch dòng ${i} đến ${end}...`);
-          
-          const currentBatchRows = results.slice(i, end);
-          const currentBatchTexts = currentBatchRows.map(r => String(r[targetColumnIndex] || ""));
-          
-          try {
-            const translatedBatch = await translateBatch(currentBatchTexts);
+          if (results.length === 0 || targetColumnIndex === -1) {
+            addLog("Không tìm thấy tên cột khớp. Đang dò tìm tự động...");
             
-            for (let j = 0; j < translatedBatch.length; j++) {
-              if (i + j < totalRows) {
-                const original = String(results[i + j][targetColumnIndex] || "");
-                const translated = translatedBatch[j];
-                
-                if (translated && translated.trim() !== "" && translated !== original) {
-                  successfulTranslations++;
-                  results[i + j][targetColumnIndex] = translated;
+            // Re-read first sheet if no rows selected yet
+            if (results.length === 0) {
+              const fallbackSheet = workbook.Sheets[workbook.SheetNames[0]];
+              const fallbackRows = XLSX.utils.sheet_to_json(fallbackSheet, { header: 1, defval: "", raw: false }) as any[][];
+              results = fallbackRows.map(r => Array.isArray(r) ? [...r] : []);
+            }
+            
+            if (results.length > 0) {
+              const sampleRows = Math.min(results.length, 50);
+              const numCols = Math.max(...results.slice(0, sampleRows).map(r => r.length));
+              let maxScore = 0;
+              
+              for (let c = 0; c < numCols; c++) {
+                let score = 0;
+                for (let r = 0; r < sampleRows; r++) {
+                  const text = String(results[r][c] || "");
+                  // Score based on Chinese characters density
+                  if (/[\u4E00-\u9FFF]/.test(text)) score += 5;
+                  if (text.length > 2) score += 1;
+                }
+                if (score > maxScore) {
+                  maxScore = score;
+                  targetColumnIndex = c;
                 }
               }
             }
-          } catch (batchErr) {
-            console.error("Batch failed", batchErr);
+          }
+
+          if (results.length === 0 || targetColumnIndex === -1) {
+            setError("Không tìm thấy cột 'Giao hàng tận nơi' hoặc dữ liệu hàng hóa. Vui lòng kiểm tra lại file Excel.");
+            setLoading(false);
+            return;
+          }
+
+          const detectedHeader = String(results[headerRowIndex]?.[targetColumnIndex] || `Cột ${targetColumnIndex + 1}`);
+          const logMsg = `Đã chọn: "${detectedHeader}" (Cột ${targetColumnIndex + 1}) trong sheet "${targetSheetName}"`;
+          setDebugInfo(logMsg);
+          addLog(logMsg);
+
+          const totalRows = results.length;
+          let successfulTranslations = 0;
+          let totalToTranslate = 0;
+
+          // Count non-empty cells after header
+          for (let k = headerRowIndex + 1; k < totalRows; k++) {
+            const cellVal = String(results[k][targetColumnIndex] || "").trim();
+            if (cellVal.length > 0) {
+              totalToTranslate++;
+            }
           }
           
-          setProgress(Math.round((end / totalRows) * 100));
-          await new Promise(resolve => setTimeout(resolve, 1200));
-        }
+          if (totalToTranslate === 0) {
+            setError("Tệp không có dữ liệu cần dịch trong cột đã chọn.");
+            setLoading(false);
+            return;
+          }
 
-        if (totalToTranslate > 0 && successfulTranslations === 0) {
-          addLog("Cảnh báo: Không có ô nào được dịch thành công.");
-          setError("Ứng dụng không thể dịch được nội dung. Vui lòng kiểm tra lại kết nối mạng hoặc thử lại sau.");
-        } else {
-          addLog(`Dịch thành công ${successfulTranslations}/${totalToTranslate} ô.`);
-        }
+          addLog(`Tìm thấy ${totalToTranslate} dòng cần dịch.`);
+          const batchSize = 8; // Reduced batch size for better stability and token limits on mobile
 
-        setTranslatedData(results);
-        setIsCompleted(true);
-        setLoading(false);
+          // Start translation from row AFTER header row
+          for (let i = headerRowIndex + 1; i < totalRows; i += batchSize) {
+            const end = Math.min(i + batchSize, totalRows);
+            const currentProgress = Math.round(((i - headerRowIndex) / totalToTranslate) * 100);
+            setProgress(currentProgress > 100 ? 100 : currentProgress);
+            
+            const currentChunkItems = results.slice(i, end).filter(r => String(r[targetColumnIndex] || "").trim().length > 0).length;
+            if (currentChunkItems === 0) continue;
+
+            addLog(`Đang dịch dòng ${i} đến ${end - 1} (${currentChunkItems} mục)...`);
+            
+            const currentBatchRows = results.slice(i, end);
+            const currentBatchTexts = currentBatchRows.map(r => String(r[targetColumnIndex] || ""));
+            
+            try {
+              const translatedBatch = await translateBatch(currentBatchTexts);
+              
+              for (let j = 0; j < translatedBatch.length; j++) {
+                const rowIndex = i + j;
+                if (rowIndex < totalRows) {
+                  const original = String(results[rowIndex][targetColumnIndex] || "");
+                  const translated = translatedBatch[j];
+                  
+                  if (translated && translated.trim() !== "" && translated !== original) {
+                    successfulTranslations++;
+                    results[rowIndex][targetColumnIndex] = translated;
+                  }
+                }
+              }
+            } catch (batchErr) {
+              console.error("Batch failed", batchErr);
+              addLog("Một nhóm hàng bị lỗi, đang tiếp tục nhóm sau...");
+            }
+            
+            // Wait between batches to prevent rate limits
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+
+          setProgress(100);
+          if (successfulTranslations === 0) {
+            addLog("Không có mục nào được dịch.");
+            setError("AI không phản hồi nội dung dịch. Vui lòng kiểm tra lại cột dữ liệu hoặc thử với file nhỏ hơn.");
+          } else {
+            addLog(`Hoàn tất! Đã dịch ${successfulTranslations}/${totalToTranslate} mục.`);
+          }
+
+          setTranslatedData(results);
+          setIsCompleted(true);
+          setLoading(false);
+        } catch (innerErr: any) {
+          console.error("XSLX Error:", innerErr);
+          setError(`Lỗi phân tích file: ${innerErr.message || "Định dạng không hỗ trợ"}`);
+          setLoading(false);
+        }
       };
+      
       reader.readAsArrayBuffer(file);
-    } catch (err) {
+    } catch (err: any) {
       console.error("File processing error:", err);
-      setError("Đã xảy ra lỗi khi xử lý tệp.");
+      setError(`Lỗi hệ thống: ${err.message || "Không thể xử lý tệp"}`);
       setLoading(false);
     }
   };
@@ -362,6 +447,7 @@ Dữ liệu: ${JSON.stringify(batchToTranslate)}`,
       let maxWidth = 10;
       
       // Check every single row to ensure total visibility
+      // Especially the column we translated
       for (let i = 0; i < data.length; i++) {
         const width = getVisualWidth(data[i][colIndex]);
         if (width > maxWidth) {
@@ -369,9 +455,10 @@ Dữ liệu: ${JSON.stringify(batchToTranslate)}`,
         }
       }
       
-      // More aggressive padding for mobile readability
-      // We add a safety margin of +8 and multiplier 1.2
-      return { wch: Math.min(Math.ceil(maxWidth * 1.25 + 8), 120) };
+      // For mobile readability, we need columns to be wide enough but not infinite
+      // The translated column often gets very long
+      const finalWidth = Math.min(Math.ceil(maxWidth * 1.35 + 5), 150);
+      return { wch: finalWidth };
     });
     
     worksheet["!cols"] = colWidths;
