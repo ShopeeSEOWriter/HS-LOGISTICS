@@ -100,9 +100,7 @@ export default function GoodsTranslator() {
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const ai = await getAI();
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: `Bạn là chuyên gia dịch thuật Logistics Trung - Việt cấp cao. 
+        const prompt = `Bạn là chuyên gia dịch thuật Logistics Trung - Việt cấp cao. 
 Nhiệm vụ: Dịch danh sách tên hàng hóa trong ngành vận chuyển từ tiếng Trung sang tiếng Việt.
 
 QUY TẮC BẮT BUỘC:
@@ -120,9 +118,13 @@ QUY TẮC BẮT BUỘC:
    - "箱" (Xiāng) -> "thùng"
 5. GIỮ NGUYÊN SỐ & CHỮ TIẾNG ANH: Giữ nguyên các con số, đơn vị quốc tế (KG, m3, $, VNĐ), và các mã hàng tiếng Anh (như HS code, Model).
 6. ĐỊNH DẠNG: Trả về một MẢNG JSON (JSON Array) gồm ĐÚNG ${batchToTranslate.length} chuỗi tiếng Việt theo thứ tự.
-7. CHỈ TRẢ VỀ JSON: Không giải thích gì thêm, không bọc trong Markdown.
+7. CHỈ TRẢ VỀ JSON: Không giải thích gì thêm.
 
-Dữ liệu nguồn cần dịch: ${JSON.stringify(batchToTranslate)}`,
+Dữ liệu nguồn cần dịch: ${JSON.stringify(batchToTranslate)}`;
+
+        const response = await ai.models.generateContent({
+          model: "gemini-1.5-flash",
+          contents: prompt,
           config: {
             temperature: 0,
             responseMimeType: "application/json",
@@ -224,7 +226,11 @@ Dữ liệu nguồn cần dịch: ${JSON.stringify(batchToTranslate)}`,
             "GIAO TAN NOI",
             "GIAO TẬN NƠI",
             "NOI NHAN",
-            "NƠI NHẬN"
+            "NƠI NHẬN",
+            "DIA CHI",
+            "ĐỊA CHỈ",
+            "ADDRESS",
+            "DELIVERY"
           ].map(p => p.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
 
           const secondaryHeaders = [
@@ -355,7 +361,7 @@ Dữ liệu nguồn cần dịch: ${JSON.stringify(batchToTranslate)}`,
           }
 
           addLog(`Tìm thấy ${totalToTranslate} dòng cần dịch.`);
-          const batchSize = 8; // Reduced batch size for better stability and token limits on mobile
+          const batchSize = 4; // Further reduced batch size for strict mobile token limits
 
           // Start translation from row AFTER header row
           for (let i = headerRowIndex + 1; i < totalRows; i += batchSize) {

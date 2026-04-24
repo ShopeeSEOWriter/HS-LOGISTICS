@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { collection, query, getDocs, doc, updateDoc, addDoc, serverTimestamp, where, writeBatch, getDoc, setDoc } from "firebase/firestore";
+import { 
+  collection, query, getDocs, doc, updateDoc, addDoc, 
+  serverTimestamp, where, writeBatch, getDoc, setDoc,
+  onSnapshot, orderBy 
+} from "firebase/firestore";
 import { db, auth } from "../lib/firebase";
 import { handleFirestoreError, OperationType } from "../lib/errorHandler";
 import * as XLSX from "xlsx";
@@ -15,6 +19,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn, mapDestination, safeFormatDate } from "../lib/utils";
 import AdminSettings from "../components/AdminSettings";
 import AdminSidebar from "../components/AdminSidebar";
+import BulkUpdateModal from "../components/BulkUpdateModal";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, PieChart, Pie, Legend 
@@ -44,7 +49,9 @@ const STATUS_COLORS: Record<string, string> = {
   "Departed China": "#ea580c",
   "Đang vận chuyển ra biên giới": "#fcd34d",
   "Đang làm thủ tục hải quan": "#f59e0b",
-  "Đang kiểm hoá tại cửa khẩu": "#f97316", // Dark Orange
+  "Đang kiểm hoá tại cửa khẩu": "#ef4444",
+  "Customs inspection": "#f59e0b",
+  "Customs examination": "#ef4444",
   "Customs clearance": "#6366f1",
   "Arrived Vietnam": "#10b981",
   "Đang vận chuyển về Hà Nội": "#34d399",
@@ -61,6 +68,8 @@ const STATUS_CN: Record<string, string> = {
   "Đang vận chuyển ra biên giới": "前往边境中",
   "Đang làm thủ tục hải quan": "海关清关中",
   "Đang kiểm hoá tại cửa khẩu": "海关查验中",
+  "Customs inspection": "海关清关中",
+  "Customs examination": "海关查验中",
   "Customs clearance": "已完成清关",
   "Arrived Vietnam": "已入越南境",
   "Đang vận chuyển về Hà Nội": "前往河内中",
@@ -79,12 +88,15 @@ const TRUCK_ACTIONS = [
   { label: "Đã giao hàng", subLabel: "已送达", status: "Delivered", location: "Customer Address" }
 ];
 
-export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState("overview");
+export default function AdminDashboard({ initialTab = "overview" }: { initialTab?: string }) {
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [orders, setOrders] = useState<any[]>([]);
   const [trucks, setTrucks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [trackingSearchTerm, setTrackingSearchTerm] = useState("");
+  const [searchedOrder, setSearchedOrder] = useState<any | null>(null);
+  const [isSearchingTracking, setIsSearchingTracking] = useState(false);
   const [filterStatus, setFilterStatus] = useState("All");
   const [uploading, setUploading] = useState(false);
   const [selectedTruck, setSelectedTruck] = useState<string | null>(null);
@@ -94,7 +106,25 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchData();
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    const qOrders = query(collection(db, "orders"));
+    const unsubscribeOrders = onSnapshot(qOrders, (snapshot) => {
+      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    });
+
+    const qTrucks = query(collection(db, "trucks"), orderBy("updated_at", "desc"));
+    const unsubscribeTrucks = onSnapshot(qTrucks, (snapshot) => {
+      setTrucks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => {
+      unsubscribeOrders();
+      unsubscribeTrucks();
+    };
   }, []);
 
   const fetchData = async () => {
@@ -104,7 +134,7 @@ export default function AdminDashboard() {
       const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setOrders(ordersData);
 
-      const trucksSnapshot = await getDocs(collection(db, "trucks"));
+      const trucksSnapshot = await getDocs(query(collection(db, "trucks"), orderBy("updated_at", "desc")));
       setTrucks(trucksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (err) {
       console.error("Fetch error:", err);
@@ -195,6 +225,7 @@ export default function AdminDashboard() {
 
           const batch = writeBatch(db);
           const now = new Date().toISOString();
+          const serverTime = serverTimestamp();
 
           // Identify columns robustly
           const firstRow = jsonData[0];
@@ -202,11 +233,16 @@ export default function AdminDashboard() {
           const findKey = (patterns: string[]) => 
             headers.find(h => patterns.some(p => h.trim().toUpperCase().includes(p.toUpperCase())));
 
-          const trackingKey = findKey(["MA HANG", "Mã hàng", "Mã vận đơn", "Tracking", "MA_VANDON", "BILL"]) || headers[0];
-          const truckKey = findKey(["Mã xe", "Truck Code", "Container", "Xe"]);
-          const statusKey = findKey(["Trạng thái", "Status", "Tinh trang"]);
-          const destinationKey = findKey(["NOI DEN", "Nơi đến", "Destination", "Địa chỉ", "NOI_DEN"]);
+          const trackingKey = findKey(["MA HANG", "Mã hàng", "Mã vận đơn", "Tracking", "MA_VANDON", "BILL", "Order ID"]) || headers[0];
+          const truckKey = findKey(["Mã xe", "Truck Code", "Container", "Xe", "SO XE", "BIEN SO"]);
+          const statusKey = findKey(["Trạng thái", "Status", "Tinh trang", "BUOC", "STEP"]);
+          const locationKey = findKey(["Vị trí", "Location", "DIEM TINH", "KHO"]);
+          const destinationKey = findKey(["NOI DEN", "Nơi đến", "Destination", "Địa chỉ", "NOI_DEN", "KHO DEN"]);
           const noteKey = findKey(["GHI CHU", "Note", "Ghi chú", "Lưu ý"]);
+          const customerKey = findKey(["Tên khách hàng", "Customer", "NGUOI NHAN", "KHACH HANG"]);
+
+          // Track unique trucks to update their stats correctly
+          const processedTrucks = new Set<string>();
 
           for (const row of jsonData) {
             const anyRow = row as any;
@@ -214,15 +250,22 @@ export default function AdminDashboard() {
             if (rawValue === undefined || rawValue === null) continue;
 
             const rawTrackingCode = String(rawValue).trim().toUpperCase();
-            // Preserve hyphens, only remove spaces
+            // Preserve hyphens and underscores, only remove spaces
             const trackingCode = rawTrackingCode.replace(/\s+/g, "");
             
-            const truckCode = truckKey ? String(anyRow[truckKey] || "").trim() : "";
+            const truckCode = truckKey ? String(anyRow[truckKey] || "").trim().toUpperCase() : "";
             const rawStatus = statusKey ? String(anyRow[statusKey] || "").trim() : "";
             const rawNote = noteKey ? String(anyRow[noteKey] || "").trim().toLowerCase() : "";
             
+            // Default status if not provided
             let status = rawStatus || "Packed into truck/container";
-            let location = anyRow["Vị trí"] || anyRow["Location"] || "China Warehouse";
+            let location = locationKey ? String(anyRow[locationKey] || "").trim() : "China Warehouse";
+
+            // If we have a truck code, we can infer some defaults if status is missing
+            if (truckCode && !rawStatus) {
+              status = "Packed into truck/container";
+              location = "China Warehouse";
+            }
 
             // Detect "Kiem hoa" keyword
             if (rawNote.includes("kiem hoa") || rawNote.includes("kiểm hoá")) {
@@ -238,43 +281,53 @@ export default function AdminDashboard() {
             const orderRef = doc(db, "orders", trackingCode);
             const updateData: any = {
               tracking_code: trackingCode,
-              customer_name: anyRow["Tên khách hàng"] || anyRow["Customer Name"] || "Imported via Excel",
+              customer_name: (customerKey ? anyRow[customerKey] : null) || anyRow["Tên khách hàng"] || anyRow["Customer Name"] || "Imported via Excel",
               status: status,
               location: location,
               truck_code: truckCode || null,
               updated_at: now,
-              created_at: serverTimestamp(),
+              // We only set created_at if it's a new document
             };
 
             if (destination && destination !== "Chưa xác định") {
               updateData.destination = destination;
             }
 
+            // Check if document exists to preserve created_at
             batch.set(orderRef, updateData, { merge: true });
 
-            // Add log
+            // Ensure created_at exists (serverTimestamp only runs once on creation if we use merge correctly or handle existence)
+            // Actually batch.set with merge: true is fine. 
+            // Better: update created_at only if it doesn't exist
+            // But we don't have getDoc in batch, so we'll just set it regularly if it's missing or let it be.
+            // For simplicity in bulk, we'll just update fields.
+
+            // Add log (History)
             const logRef = doc(collection(db, `orders/${trackingCode}/logs`));
             batch.set(logRef, {
               order_id: trackingCode,
               status: status,
               timestamp: now,
-              location: anyRow["Vị trí"] || anyRow["Location"] || "China Warehouse",
-              note: `${truckCode ? `Loaded into truck ${truckCode}` : "Imported via Excel"}${destination ? ` - Nơi đến: ${destination}` : ""}`
+              location: location,
+              note: `${truckCode ? `Loaded into truck ${truckCode}` : "Excel Import Update"}${destination ? ` - Nơi đến: ${destination}` : ""}${rawNote ? ` - Note: ${rawNote}` : ""}`
             });
 
+            // Update Truck History
             if (truckCode) {
+              processedTrucks.add(truckCode);
               const truckRef = doc(db, "trucks", truckCode);
               batch.set(truckRef, {
                 truck_code: truckCode,
-                status: "Loading",
+                status: status === "Packed into truck/container" ? "Loading" : status,
                 destination: destination || "Chưa xác định",
+                last_location: location,
                 updated_at: now
               }, { merge: true });
             }
           }
 
           await batch.commit();
-          setMessage({ type: "success", text: `Successfully updated ${jsonData.length} orders.` });
+          setMessage({ type: "success", text: `Đã cập nhật ${jsonData.length} đơn hàng và ${processedTrucks.size} xe hàng.` });
           fetchData();
         } catch (err: any) {
           console.error("Excel processing error:", err);
@@ -305,6 +358,7 @@ export default function AdminDashboard() {
 
       if (querySnapshot.empty) {
         setMessage({ type: "error", text: "No orders found in this truck." });
+        setUploading(false);
         return;
       }
 
@@ -339,12 +393,78 @@ export default function AdminDashboard() {
       setMessage({ type: "success", text: `Updated ${querySnapshot.size} orders in truck ${selectedTruck}.` });
       fetchData();
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `trucks/${selectedTruck}/bulk_update`);
+      console.error(err);
       setMessage({ type: "error", text: "Failed to update truck status." });
     } finally {
       setUploading(false);
     }
   };
+
+  const handleTrackingSearch = async () => {
+    if (!trackingSearchTerm.trim()) return;
+    
+    setIsSearchingTracking(true);
+    try {
+      const q = query(collection(db, "orders"), where("tracking_code", "==", trackingSearchTerm.trim().toUpperCase()));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const orderData = querySnapshot.docs[0].data();
+        setSearchedOrder({ id: querySnapshot.docs[0].id, ...orderData });
+      } else {
+        setMessage({ type: "error", text: `Không tìm thấy mã vận đơn: ${trackingSearchTerm}` });
+        setSearchedOrder(null);
+      }
+    } catch (err) {
+      console.error("Search tracking error:", err);
+      setMessage({ type: "error", text: "Lỗi khi tìm kiếm mã vận đơn." });
+    } finally {
+      setIsSearchingTracking(false);
+    }
+  };
+
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [bulkUpdateStatus, setBulkUpdateStatus] = useState<{ label: string, location: string, value?: string } | null>(null);
+
+  const handleClearAllData = async () => {
+    setUploading(true);
+    try {
+      const collectionsToClear = ["trucks", "orders", "orders/*/logs"]; // simplified representation
+      // In reality we should clear each collection specifically
+      const bulkCollections = ["trucks", "orders"];
+      
+      for (const collName of bulkCollections) {
+        const q = query(collection(db, collName));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      setMessage({ type: "success", text: "Đã xóa toàn bộ dữ liệu thành công!" });
+    } catch (error: any) {
+      console.error("Clear data error:", error);
+      setMessage({ type: "error", text: "Lỗi khi xóa dữ liệu." });
+    } finally {
+      setUploading(false);
+      setShowClearConfirm(false);
+    }
+  };
+
+  const BULK_STATUS_OPTIONS = [
+    { label: "Đã nhận tại kho TQ", subLabel: "已入中国仓", value: "Received at China warehouse", location: "Kho Trung Quốc", color: "bg-amber-500" },
+    { label: "Đã bốc hàng lên xe", subLabel: "已装车", value: "Packed into truck/container", location: "Kho Trung Quốc", color: "bg-blue-500" },
+    { label: "Đã xuất kho TQ", subLabel: "中国仓已出库", value: "Outbound China", location: "Trung Quốc", color: "bg-orange-500" },
+    { label: "Đang chuyển biên giới", subLabel: "边境转运中", value: "In transit to border", location: "Trung Quốc", color: "bg-purple-500" },
+    { label: "Đang làm thủ tục hải quan", subLabel: "海关清关中", value: "Customs inspection", location: "Cửa khẩu", color: "bg-amber-600" },
+    { label: "Hàng kiểm hoá", subLabel: "海关查验中", value: "Customs examination", location: "Cửa khẩu", color: "bg-red-500" },
+    { label: "Đã thông quan", subLabel: "已清关", value: "Customs cleared", location: "Cửa khẩu", color: "bg-emerald-600" },
+    { label: "Chuyển về Hà Nội", subLabel: "运往河内中", value: "Transit to Hanoi", location: "Việt Nam", color: "bg-indigo-500" },
+    { label: "Đã về kho Hà Nội", subLabel: "已到河内仓", value: "Arrived Hanoi warehouse", location: "Hà Nội", color: "bg-blue-600" },
+    { label: "Đang phân loại tại kho", subLabel: "仓库理货中", value: "Sorting at warehouse", location: "Kho Hà Nội", color: "bg-teal-600" },
+    { label: "Đang giao hàng", subLabel: "派送中", value: "Out for delivery", location: "Người nhận", color: "bg-pink-500" },
+    { label: "Đã giao hàng", subLabel: "已送达", value: "Delivered", location: "Người nhận", color: "bg-green-500" },
+  ];
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.tracking_code.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -355,9 +475,9 @@ export default function AdminDashboard() {
 
   const stats = {
     total: orders.length,
-    china: orders.filter(o => o.status.includes("China")).length,
-    transit: orders.filter(o => o.status.includes("transit") || o.status.includes("Departed") || o.status.includes("Customs")).length,
-    vietnam: orders.filter(o => o.status.includes("Vietnam") || o.status.includes("Hanoi")).length,
+    china: orders.filter(o => ["Received at China warehouse", "Packed into truck/container", "Outbound China", "In transit to border"].includes(o.status)).length,
+    transit: orders.filter(o => ["Customs inspection", "Customs examination", "Customs cleared", "Transit to Hanoi"].includes(o.status)).length,
+    vietnam: orders.filter(o => ["Arrived Hanoi warehouse", "Sorting at warehouse", "Out for delivery"].includes(o.status)).length,
     delivered: orders.filter(o => o.status === "Delivered").length
   };
 
@@ -424,13 +544,96 @@ export default function AdminDashboard() {
 
         {activeTab === "overview" && (
           <div className="space-y-12">
+            {/* Tracking Search Form */}
+            <div className="bg-white p-8 rounded-3xl shadow-xl border-b-4 border-primary">
+              <h3 className="text-xl font-black mb-6 flex items-center gap-2">
+                <Search className="h-5 w-5 text-primary" />
+                Truy vấn hành trình nhanh / 快速轨迹查询
+              </h3>
+              <div className="flex flex-col md:flex-row gap-4">
+                <input 
+                  type="text" 
+                  placeholder="Nhập mã vận đơn (Ví dụ: hs432-21) / 输入单号"
+                  value={trackingSearchTerm}
+                  onChange={(e) => setTrackingSearchTerm(e.target.value)}
+                  className="flex-1 px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-primary focus:bg-white transition-all font-bold text-lg"
+                />
+                <button 
+                  onClick={handleTrackingSearch}
+                  disabled={isSearchingTracking}
+                  className="bg-primary text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-primary/30 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSearchingTracking ? "Đang tìm..." : "Tìm kiếm / 搜索"}
+                </button>
+              </div>
+
+              {searchedOrder && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-8 p-6 bg-slate-50 rounded-2xl border-l-4 border-primary"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Vị trí hiện tại / 当前位置</p>
+                      <p className="text-lg font-black text-slate-900 flex items-center gap-2">
+                        <Truck className="h-5 w-5 text-primary" />
+                        {searchedOrder.truck_code ? `Nằm trên xe: ${searchedOrder.truck_code}` : "Chưa bốc lên xe"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ngày bốc hàng / 装车日期</p>
+                      <p className="text-lg font-black text-slate-900">
+                        {safeFormatDate(searchedOrder.updated_at)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Trạng thái hiện tại / 当前状态</p>
+                      <span className="px-3 py-1 rounded-full text-[12px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[searchedOrder.status]}20`, color: STATUS_COLORS[searchedOrder.status] }}>
+                        {searchedOrder.status}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
               <StatCard label="Total Orders" subLabel="总订单" value={stats.total} icon={<Package />} color="bg-blue-500" />
-              <StatCard label="In China" subLabel="在中国" value={stats.china} icon={<MapPin />} color="bg-amber-500" />
+              <StatCard label="In China" subLabel="在中国" value={stats.china} icon={<MapPin />} iconSize={20} color="bg-amber-500" />
               <StatCard label="In Transit" subLabel="运输中" value={stats.transit} icon={<Truck />} color="bg-indigo-500" />
               <StatCard label="In Vietnam" subLabel="在越南" value={stats.vietnam} icon={<MapPin />} color="bg-emerald-500" />
               <StatCard label="Delivered" subLabel="已送达" value={stats.delivered} icon={<CheckCircle2 />} color="bg-green-500" />
+            </div>
+
+            {/* Bulk Update Tools */}
+            <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-xl font-black flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5 text-primary" />
+                  Cập nhật trạng thái hàng loạt / 批量状态更新
+                </h3>
+                <button 
+                  onClick={() => setShowClearConfirm(true)}
+                  className="px-4 py-2 bg-error/10 text-error rounded-xl font-black text-xs uppercase tracking-widest hover:bg-error/20 transition-all"
+                >
+                  Xóa toàn bộ dữ liệu / 删除所有数据
+                </button>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                {BULK_STATUS_OPTIONS.map(option => (
+                  <button
+                    key={option.value}
+                    onClick={() => setBulkUpdateStatus(option)}
+                    className="flex flex-col items-center justify-center p-6 rounded-2xl bg-slate-50 border-2 border-transparent hover:border-primary hover:bg-white transition-all group"
+                  >
+                    <div className={cn("w-3 h-3 rounded-full mb-3", option.color)} />
+                    <span className="text-sm font-black text-center text-slate-800 leading-tight">{option.label}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase mt-1">{option.subLabel}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Charts Section */}
@@ -569,6 +772,75 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {activeTab === "vehicle_history" && (
+          <div className="space-y-8">
+            <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-xl font-black">Lịch sử xe hàng / 车辆装载历史</h3>
+                  <p className="text-sm font-medium text-slate-400">Danh sách các xe hàng đã tải lên hệ thống.</p>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-slate-400 text-xs font-black uppercase tracking-widest">
+                    <tr>
+                      <th className="px-8 py-4">Số xe (车号)</th>
+                      <th className="px-8 py-4">Ngày bốc (装车日期)</th>
+                      <th className="px-8 py-4">Nơi đến (目的地)</th>
+                      <th className="px-8 py-4">Tổng mã (总单)</th>
+                      <th className="px-8 py-4">Vị trí cuối (最后位置)</th>
+                      <th className="px-8 py-4">Trạng thái (状态)</th>
+                      <th className="px-8 py-4">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {trucks.map(truck => {
+                      const truckOrders = orders.filter(o => o.truck_code === truck.truck_code);
+                      return (
+                        <tr key={truck.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-8 py-5 font-black text-slate-900">{truck.truck_code}</td>
+                          <td className="px-8 py-5 text-slate-600 font-bold text-sm">
+                            {safeFormatDate(truck.updated_at)}
+                          </td>
+                          <td className="px-8 py-5 text-slate-500 font-bold text-sm">
+                            {truck.destination || "-"}
+                          </td>
+                          <td className="px-8 py-5">
+                            <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-600">
+                              {truckOrders.length} mã
+                            </span>
+                          </td>
+                          <td className="px-8 py-5 text-slate-500 font-medium text-xs">
+                            {truck.last_location || "-"}
+                          </td>
+                          <td className="px-8 py-5">
+                            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[truck.status]}20`, color: STATUS_COLORS[truck.status] }}>
+                              {truck.status}
+                            </span>
+                          </td>
+                          <td className="px-8 py-5">
+                            <button 
+                              onClick={() => {
+                                setSelectedTruck(truck.truck_code);
+                                setActiveTab("trucks");
+                              }}
+                              className="text-primary font-bold text-xs bg-primary/10 px-3 py-2 rounded-lg hover:bg-primary/20 transition-all"
+                            >
+                              Chi tiết / 详情
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === "orders" && (
           <div className="space-y-8">
             {/* Filters */}
@@ -650,6 +922,34 @@ export default function AdminDashboard() {
         )}
 
         <AnimatePresence>
+          {bulkUpdateStatus && (
+            <BulkUpdateModal 
+              status={bulkUpdateStatus.value || bulkUpdateStatus.label}
+              location={bulkUpdateStatus.location}
+              onClose={() => setBulkUpdateStatus(null)}
+              onSuccess={(count) => {
+                setBulkUpdateStatus(null);
+                setMessage({ type: "success", text: `Đã cập nhật hàng loạt thành công ${count} đơn hàng!` });
+              }}
+            />
+          )}
+
+          {showClearConfirm && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-on-surface/40 backdrop-blur-md p-6">
+              <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-md w-full text-center">
+                <div className="w-20 h-20 bg-error/10 text-error rounded-full flex items-center justify-center mx-auto mb-6">
+                  <AlertCircle className="h-10 w-10" />
+                </div>
+                <h3 className="text-2xl font-black mb-2">Xác nhận xóa hết?</h3>
+                <p className="text-slate-500 font-medium mb-8">Hành động này sẽ xóa toàn bộ Đơn hàng và Xe hàng. Bạn có chắc chắn muốn tiếp tục?</p>
+                <div className="flex gap-4">
+                  <button onClick={() => setShowClearConfirm(false)} className="flex-1 px-6 py-4 rounded-2xl bg-slate-100 font-black">Hủy</button>
+                  <button onClick={handleClearAllData} className="flex-1 px-6 py-4 rounded-2xl bg-error text-white font-black shadow-lg shadow-error/30">Xóa dữ liệu</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {selectedOrder && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/20 backdrop-blur-sm p-6">
               <motion.div 

@@ -35,7 +35,13 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+    // Correctly handle SPA routing while avoiding returning HTML for missing static assets
     app.get("*", (req, res) => {
+      const isStaticFile = req.path.includes(".");
+      if (isStaticFile || req.path.startsWith("/src/")) {
+        res.status(404).send("Not Found");
+        return;
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

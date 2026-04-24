@@ -10,6 +10,7 @@ import Footer from "./components/Footer";
 import Home from "./pages/Home";
 import TrackingDetail from "./pages/TrackingDetail";
 import Dashboard from "./pages/Dashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import History from "./pages/History";
 import Support from "./pages/Support";
 import AdminTrucks from "./pages/AdminTrucks";
@@ -51,8 +52,9 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/tracking/:id" element={<TrackingDetail />} />
-          <Route path="/ops" element={<ProtectedRoute adminOnly><Dashboard /></ProtectedRoute>} />
-          <Route path="/admin/trucks" element={<ProtectedRoute adminOnly><AdminTrucks /></ProtectedRoute>} />
+          <Route path="/ops" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/truck-history" element={<ProtectedRoute adminOnly><AdminDashboard initialTab="vehicle_history" /></ProtectedRoute>} />
+          <Route path="/admin/trucks" element={<ProtectedRoute adminOnly><AdminDashboard initialTab="trucks" /></ProtectedRoute>} />
           <Route path="/admin/trucks/:id" element={<ProtectedRoute adminOnly><AdminTruckDetail /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings /></ProtectedRoute>} />
           <Route path="/calculator" element={<ShippingCalculator />} />

@@ -60,11 +60,11 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps) {
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-2">
           <SidebarLink 
-            to="/admin" 
+            to="/ops" 
             icon={<LayoutDashboard className="h-5 w-5" />} 
             label="Bảng điều khiển" 
             subLabel="仪表盘" 
-            active={isTabActive("/admin") && location.pathname === "/admin"} 
+            active={isTabActive("/ops")} 
             onClick={() => setIsOpen(false)}
           />
 
@@ -72,6 +72,15 @@ export default function AdminSidebar({ activeTab }: AdminSidebarProps) {
             Quản lý / 管理
           </div>
           
+          <SidebarLink 
+            to="/admin/truck-history" 
+            icon={<PlusCircle className="h-5 w-5" />} 
+            label="Lịch sử xe hàng" 
+            subLabel="车辆装载历史" 
+            active={isTabActive("/admin/truck-history")} 
+            onClick={() => setIsOpen(false)}
+          />
+
           <SidebarLink 
             to="/admin/trucks" 
             icon={<Truck className="h-5 w-5" />} 
