@@ -16,10 +16,10 @@ const STATUS_STEPS = [
   "Đã xuất kho Trung Quốc",
   "Đang vận chuyển ra biên giới",
   "Đang làm thủ tục hải quan",
-  "Đang kiểm hoá tại cửa khẩu",
+  "Hàng kiểm hoá",
   "Đã thông quan",
   "Đã về đến Việt Nam",
-  "Đang vận chuyển về Hà Nội",
+  "Chuyển về Hà Nội",
   "Đã về kho Hà Nội",
   "Đang phân loại tại kho",
   "Đang giao hàng",
@@ -27,23 +27,69 @@ const STATUS_STEPS = [
 ];
 
 const STATUS_CHINESE: Record<string, string> = {
+  // English keys
+  "Received at China warehouse": "已入中国仓",
+  "Packed into truck/container": "已装车",
+  "Outbound China": "中国仓已出库",
+  "In transit to border": "边境转运中",
+  "Customs inspection": "海关清关中",
+  "Customs examination": "海关查验中",
+  "Customs cleared": "已完成清关",
+  "Transit to Hanoi": "前往河内中",
+  "Arrived Hanoi warehouse": "已到河内仓",
+  "Sorting at warehouse": "仓库分拣中",
+  "Out for delivery": "派送中",
+  "Delivered": "已送达",
+  // Vietnamese keys
   "Đã tạo đơn hàng": "已创建订单",
   "Đã nhận tại kho Trung Quốc": "已入中国仓",
   "Đã bốc hàng lên xe": "已装车",
   "Đã xuất kho Trung Quốc": "已从中国发货",
   "Đang vận chuyển ra biên giới": "前往边境中",
-  "Đang kiểm hoá tại cửa khẩu": "海关查验中",
+  "Hàng kiểm hoá": "海关查验中",
   "Đang làm thủ tục hải quan": "海关清关中",
   "Đã thông quan": "已完成清关",
   "Đã về đến Việt Nam": "已入越南境",
-  "Đang vận chuyển về Hà Nội": "前往河内中",
+  "Chuyển về Hà Nội": "前往河内中",
   "Đã về kho Hà Nội": "已到河内仓",
   "Đang phân loại tại kho": "仓库分拣中",
   "Đang giao hàng": "派送中",
   "Đã giao hàng": "已送达"
 };
 
+const STATUS_VIETNAMESE: Record<string, string> = {
+  "Received at China warehouse": "Đã nhận tại kho Trung Quốc",
+  "Packed into truck/container": "Đã bốc hàng lên xe",
+  "Outbound China": "Đã xuất kho Trung Quốc",
+  "In transit to border": "Đang chuyển biên giới",
+  "Customs inspection": "Đang làm thủ tục hải quan",
+  "Customs examination": "Hàng kiểm hoá",
+  "Customs cleared": "Đã thông quan",
+  "Transit to Hanoi": "Chuyển về Hà Nội",
+  "Arrived Hanoi warehouse": "Đã về kho Hà Nội",
+  "Sorting at warehouse": "Đang phân loại tại kho",
+  "Out for delivery": "Đang giao hàng",
+  "Delivered": "Đã giao hàng"
+};
+
+const getStatusVN = (status: string) => STATUS_VIETNAMESE[status] || status;
+const getStatusCN = (status: string) => STATUS_CHINESE[status] || status;
+
 const STATUS_LOCATIONS: Record<string, string> = {
+  // English keys
+  "Received at China warehouse": "Trung Quốc",
+  "Packed into truck/container": "Trung Quốc",
+  "Outbound China": "Trung Quốc",
+  "In transit to border": "Trung Quốc",
+  "Customs inspection": "Biên giới",
+  "Customs examination": "Biên giới",
+  "Customs cleared": "Biên giới",
+  "Transit to Hanoi": "Việt Nam",
+  "Arrived Hanoi warehouse": "Việt Nam",
+  "Sorting at warehouse": "Việt Nam",
+  "Out for delivery": "Việt Nam",
+  "Delivered": "Việt Nam",
+  // Vietnamese keys
   "Đã tạo đơn hàng": "Hệ thống",
   "Đã nhận tại kho Trung Quốc": "Trung Quốc",
   "Đã bốc hàng lên xe": "Trung Quốc",
@@ -54,6 +100,7 @@ const STATUS_LOCATIONS: Record<string, string> = {
   "Đã thông quan": "Biên giới",
   "Đã về đến Việt Nam": "Việt Nam",
   "Đang vận chuyển về Hà Nội": "Việt Nam",
+  "Chuyển về Hà Nội": "Việt Nam",
   "Đã về kho Hà Nội": "Việt Nam",
   "Đang phân loại tại kho": "Việt Nam",
   "Đang giao hàng": "Việt Nam",
@@ -342,17 +389,19 @@ export default function TrackingDetail() {
               <span className="relative flex h-2.5 w-2.5">
                 <span className={cn(
                   "absolute inline-flex h-full w-full animate-ping rounded-full opacity-75",
-                  order.status === "Đã giao hàng" ? "bg-green-400" : 
+                  order.status === "Đã giao hàng" || order.status === "Delivered" ? "bg-green-400" : 
                   order.isDelayed ? "bg-error" : "bg-primary"
                 )}></span>
                 <span className={cn(
                   "relative inline-flex h-2.5 w-2.5 rounded-full",
-                  order.status === "Đã giao hàng" ? "bg-green-600" : 
+                  order.status === "Đã giao hàng" || order.status === "Delivered" ? "bg-green-600" : 
                   order.isDelayed ? "bg-error" : "bg-primary"
                 )}></span>
               </span>
-              {order.status}
-              <span className="ml-2 text-[10px] opacity-60">{STATUS_CHINESE[order.status]}</span>
+              <div className="flex flex-col items-start gap-0.5">
+                <span className="leading-none">{getStatusVN(order.status)}</span>
+                <span className="text-[10px] font-bold opacity-60 leading-none">{getStatusCN(order.status)}</span>
+              </div>
             </div>
             <div className="flex flex-col items-start gap-1 md:items-end">
               <p className={cn(
@@ -449,11 +498,11 @@ export default function TrackingDetail() {
               <TimelineItem 
                 key={log.id}
                 status={index === logs.length - 1 ? "active" : "completed"}
-                title={log.status}
-                subLabel={STATUS_CHINESE[log.status]}
+                title={getStatusVN(log.status)}
+                subLabel={getStatusCN(log.status)}
                 time={safeFormatDate(log.timestamp)}
                 description={log.note}
-                tag={log.location || STATUS_LOCATIONS[log.status]}
+                tag={log.location || STATUS_LOCATIONS[log.status] || STATUS_LOCATIONS[getStatusVN(log.status)]}
                 isDelayed={index === logs.length - 1 && order.isDelayed}
               />
             ))}
@@ -517,7 +566,7 @@ export default function TrackingDetail() {
                   className="signature-gradient h-full rounded-full transition-all duration-1000" 
                   style={{ 
                     width: (() => {
-                      const index = STATUS_STEPS.indexOf(order.status);
+                      const index = STATUS_STEPS.indexOf(getStatusVN(order.status));
                       if (index === -1) return "10%";
                       return `${((index + 1) / STATUS_STEPS.length) * 100}%`;
                     })()
@@ -610,9 +659,15 @@ function TimelineItem({ status, title, subLabel, time, description, tag, isDelay
         status === "active" && (isDelayed ? "bg-error/5 border-l-2 border-error" : "bg-surface-container-low border-l-2 border-primary")
       )}>
         <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className={cn("text-sm font-bold", status === "active" ? (isDelayed ? "text-error" : "text-primary") : "text-on-surface")}>{title}</p>
-            {subLabel && <p className="text-[10px] font-medium opacity-50">{subLabel}</p>}
+          <div className="flex flex-col gap-0.5">
+            <p className={cn("text-sm font-black leading-tight", status === "active" ? (isDelayed ? "text-error" : "text-primary") : "text-on-surface")}>
+              {title}
+            </p>
+            {subLabel && (
+              <p className="text-[11px] font-bold opacity-70 leading-tight">
+                {subLabel}
+              </p>
+            )}
           </div>
           {tag && (
             <span className={cn(

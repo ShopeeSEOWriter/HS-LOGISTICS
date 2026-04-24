@@ -78,6 +78,24 @@ const STATUS_CN: Record<string, string> = {
   "Delivered": "已送达"
 };
 
+const STATUS_VN: Record<string, string> = {
+  "Order created": "Đã tạo đơn hàng",
+  "Received at China warehouse": "Đã nhận tại kho TQ",
+  "Packed into truck/container": "Đã bốc hàng lên xe",
+  "Outbound China": "Đã xuất kho TQ",
+  "In transit to border": "Đang chuyển biên giới",
+  "Customs inspection": "Đang làm thủ tục hải quan",
+  "Customs examination": "Hàng kiểm hoá",
+  "Customs cleared": "Đã thông quan",
+  "Transit to Hanoi": "Chuyển về Hà Nội",
+  "Arrived Hanoi warehouse": "Đã về kho Hà Nội",
+  "Sorting at warehouse": "Đang phân loại tại kho",
+  "Out for delivery": "Đang giao hàng",
+  "Delivered": "Đã giao hàng"
+};
+
+const getStatusVN = (status: string) => STATUS_VN[status] || status;
+
 const TRUCK_ACTIONS = [
   { label: "Đã bốc hàng lên xe", subLabel: "已装车", status: "Packed into truck/container", location: "China Warehouse" },
   { label: "Đang làm thủ tục hải quan", subLabel: "海关清关中", status: "Customs clearance", location: "Border Gate" },
@@ -126,6 +144,59 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
       unsubscribeTrucks();
     };
   }, []);
+
+  const syncTrucksFromOrders = async () => {
+    setUploading(true);
+    try {
+      const ordersSnapshot = await getDocs(collection(db, "orders"));
+      const truckMap = new Map<string, { lastStatus: string, destination: string, lastUpdate: any, count: number }>();
+
+      ordersSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const truckCode = data.truck_code;
+        if (truckCode) {
+          const current = truckMap.get(truckCode);
+          if (!current || (data.updated_at > current.lastUpdate)) {
+            truckMap.set(truckCode, {
+              lastStatus: data.status,
+              destination: data.destination || (current?.destination || "Chưa xác định"),
+              lastUpdate: data.updated_at,
+              count: (current?.count || 0) + 1
+            });
+          } else {
+            truckMap.set(truckCode, {
+              ...current,
+              count: current.count + 1
+            });
+          }
+        }
+      });
+
+      const batch = writeBatch(db);
+      const now = new Date().toISOString();
+
+      truckMap.forEach((info, code) => {
+        const truckRef = doc(db, "trucks", code);
+        batch.set(truckRef, {
+          truck_code: code,
+          status: info.lastStatus,
+          destination: info.destination,
+          last_location: "Cập nhật từ dữ liệu đơn",
+          updated_at: info.lastUpdate || now,
+          order_count: info.count
+        }, { merge: true });
+      });
+
+      await batch.commit();
+      setMessage({ type: "success", text: `Đã đồng bộ thành công ${truckMap.size} xe hàng từ dữ liệu đơn hàng!` });
+      fetchData();
+    } catch (err) {
+      console.error("Sync error:", err);
+      setMessage({ type: "error", text: "Lỗi khi đồng bộ dữ liệu xe hàng." });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -233,9 +304,9 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
           const findKey = (patterns: string[]) => 
             headers.find(h => patterns.some(p => h.trim().toUpperCase().includes(p.toUpperCase())));
 
-          const trackingKey = findKey(["MA HANG", "Mã hàng", "Mã vận đơn", "Tracking", "MA_VANDON", "BILL", "Order ID"]) || headers[0];
-          const truckKey = findKey(["Mã xe", "Truck Code", "Container", "Xe", "SO XE", "BIEN SO"]);
-          const statusKey = findKey(["Trạng thái", "Status", "Tinh trang", "BUOC", "STEP"]);
+          const trackingKey = findKey(["MA HANG", "Mã hàng", "Mã vận đơn", "Tracking", "MA_VANDON", "BILL", "Order ID", "Mã"]) || headers[0];
+          const truckKey = findKey(["Mã xe", "Truck Code", "Container", "Xe", "SO XE", "BIEN SO", "SỐ XE", "BIỂN SỐ", "MÃ XE"]);
+          const statusKey = findKey(["Trạng thái", "Status", "Tinh trang", "BUOC", "STEP", "TRẠNG THÁI"]);
           const locationKey = findKey(["Vị trí", "Location", "DIEM TINH", "KHO"]);
           const destinationKey = findKey(["NOI DEN", "Nơi đến", "Destination", "Địa chỉ", "NOI_DEN", "KHO DEN"]);
           const noteKey = findKey(["GHI CHU", "Note", "Ghi chú", "Lưu ý"]);
@@ -327,11 +398,11 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
           }
 
           await batch.commit();
-          setMessage({ type: "success", text: `Đã cập nhật ${jsonData.length} đơn hàng và ${processedTrucks.size} xe hàng.` });
+          setMessage({ type: "success", text: `Đã cập nhật ${jsonData.length} đơn hàng và ${processedTrucks.size} xe hàng thành công!` });
           fetchData();
         } catch (err: any) {
           console.error("Excel processing error:", err);
-          setMessage({ type: "error", text: "Lỗi khi xử lý tệp Excel." });
+          setMessage({ type: "error", text: "Lỗi khi xử lý tệp Excel. Vui lòng kiểm tra lại định dạng." });
         } finally {
           setUploading(false);
         }
@@ -339,7 +410,7 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
       reader.readAsArrayBuffer(file);
     } catch (err) {
       console.error("Upload error:", err);
-      setMessage({ type: "error", text: "An error occurred during Excel import." });
+      setMessage({ type: "error", text: "Đã xảy ra lỗi trong quá trình nhập Excel." });
       setUploading(false);
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -357,7 +428,7 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
-        setMessage({ type: "error", text: "No orders found in this truck." });
+        setMessage({ type: "error", text: "Không tìm thấy đơn hàng nào trong xe này." });
         setUploading(false);
         return;
       }
@@ -378,7 +449,7 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
           status: action.status,
           timestamp: now,
           location: action.location,
-          note: `Bulk update via truck ${selectedTruck}`
+          note: `Cập nhật hàng loạt qua xe ${selectedTruck}`
         });
       });
 
@@ -390,11 +461,11 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
       });
 
       await batch.commit();
-      setMessage({ type: "success", text: `Updated ${querySnapshot.size} orders in truck ${selectedTruck}.` });
+      setMessage({ type: "success", text: `Đã cập nhật thành công ${querySnapshot.size} đơn hàng trong xe ${selectedTruck}.` });
       fetchData();
     } catch (err) {
       console.error(err);
-      setMessage({ type: "error", text: "Failed to update truck status." });
+      setMessage({ type: "error", text: "Lỗi khi cập nhật trạng thái xe." });
     } finally {
       setUploading(false);
     }
@@ -577,8 +648,13 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Vị trí hiện tại / 当前位置</p>
                       <p className="text-lg font-black text-slate-900 flex items-center gap-2">
-                        <Truck className="h-5 w-5 text-primary" />
-                        {searchedOrder.truck_code ? `Nằm trên xe: ${searchedOrder.truck_code}` : "Chưa bốc lên xe"}
+                         <Truck className="h-5 w-5 text-primary" />
+                        {getStatusVN(searchedOrder.status)}
+                        {searchedOrder.truck_code && (
+                          <span className="text-xs font-bold text-slate-400">
+                            (Xe: {searchedOrder.truck_code})
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div>
@@ -589,9 +665,14 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Trạng thái hiện tại / 当前状态</p>
-                      <span className="px-3 py-1 rounded-full text-[12px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[searchedOrder.status]}20`, color: STATUS_COLORS[searchedOrder.status] }}>
-                        {searchedOrder.status}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[searchedOrder.status]}20`, color: STATUS_COLORS[searchedOrder.status] }}>
+                          {getStatusVN(searchedOrder.status)}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase ml-2">
+                          {STATUS_CN[searchedOrder.status] || "未知"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -747,7 +828,7 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
                         <td className="px-8 py-5 text-slate-600 font-medium">{order.customer_name}</td>
                         <td className="px-8 py-5">
                           <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[order.status]}20`, color: STATUS_COLORS[order.status] }}>
-                            {order.status}
+                            {getStatusVN(order.status)}
                             <span className="ml-1 opacity-60">({STATUS_CN[order.status] || "未知"})</span>
                           </span>
                         </td>
@@ -780,6 +861,13 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
                   <h3 className="text-xl font-black">Lịch sử xe hàng / 车辆装载历史</h3>
                   <p className="text-sm font-medium text-slate-400">Danh sách các xe hàng đã tải lên hệ thống.</p>
                 </div>
+                <button 
+                  onClick={syncTrucksFromOrders}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl hover:bg-slate-200 transition-colors text-slate-600 font-bold text-xs"
+                >
+                  <RefreshCw className={cn("h-4 w-4", uploading && "animate-spin")} />
+                  Đồng bộ từ đơn hàng / 从订单同步
+                </button>
               </div>
               
               <div className="overflow-x-auto">
@@ -816,9 +904,14 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
                             {truck.last_location || "-"}
                           </td>
                           <td className="px-8 py-5">
-                            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[truck.status]}20`, color: STATUS_COLORS[truck.status] }}>
-                              {truck.status}
-                            </span>
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[truck.status]}20`, color: STATUS_COLORS[truck.status] }}>
+                                {getStatusVN(truck.status)}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase ml-2">
+                                {STATUS_CN[truck.status] || "未知"}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-8 py-5">
                             <button 
@@ -898,8 +991,8 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
                           )}
                         </td>
                         <td className="px-8 py-5">
-                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter bg-blue-50 text-blue-600 border border-blue-100">
-                            {order.status}
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[order.status]}20`, color: STATUS_COLORS[order.status] }}>
+                            {getStatusVN(order.status)}
                             <span className="ml-1 opacity-60">({STATUS_CN[order.status] || "未知"})</span>
                           </span>
                         </td>
@@ -928,7 +1021,7 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
               location={bulkUpdateStatus.location}
               onClose={() => setBulkUpdateStatus(null)}
               onSuccess={(count) => {
-                setBulkUpdateStatus(null);
+                // We don't close the modal immediately so the user can see the success summary in the modal
                 setMessage({ type: "success", text: `Đã cập nhật hàng loạt thành công ${count} đơn hàng!` });
               }}
             />
@@ -982,8 +1075,13 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
                   </div>
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Status / 当前状态</p>
-                    <div className="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[selectedOrder.status]}20`, color: STATUS_COLORS[selectedOrder.status] }}>
-                      {selectedOrder.status} ({STATUS_CN[selectedOrder.status] || "未知"})
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter" style={{ backgroundColor: `${STATUS_COLORS[selectedOrder.status]}20`, color: STATUS_COLORS[selectedOrder.status] }}>
+                        {getStatusVN(selectedOrder.status)}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase ml-2">
+                        {STATUS_CN[selectedOrder.status] || "未知"}
+                      </span>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -1038,7 +1136,18 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
         </AnimatePresence>
 
         {activeTab === "trucks" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-black">Quản lý xe / 车辆管理</h3>
+              <button 
+                onClick={syncTrucksFromOrders}
+                className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 transition-colors font-black text-xs uppercase"
+              >
+                <RefreshCw className={cn("h-4 w-4", uploading && "animate-spin")} />
+                Cập nhật từ danh sách đơn / 更新
+              </button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Truck List */}
             <div className="lg:col-span-4 space-y-4">
               <h3 className="text-xl font-black mb-6">Active Trucks</h3>
@@ -1059,10 +1168,11 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
                   </div>
                   <p className="text-xl font-black mb-4">{truck.truck_code}</p>
                   <div className={cn(
-                    "inline-block px-2 py-1 rounded text-[10px] font-black uppercase tracking-tighter",
+                    "inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded text-[10px] font-black uppercase tracking-tighter",
                     selectedTruck === truck.truck_code ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
                   )}>
-                    {truck.status}
+                    <span>{getStatusVN(truck.status)}</span>
+                    <span className="opacity-60">{STATUS_CN[truck.status] || "未知"}</span>
                   </div>
                 </button>
               ))}
@@ -1137,6 +1247,7 @@ export default function AdminDashboard({ initialTab = "overview" }: { initialTab
               </AnimatePresence>
             </div>
           </div>
+        </div>
         )}
 
         {activeTab === "settings" && (
