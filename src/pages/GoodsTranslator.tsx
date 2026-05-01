@@ -123,7 +123,7 @@ QUY TẮC BẮT BUỘC:
 Dữ liệu nguồn cần dịch: ${JSON.stringify(batchToTranslate)}`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model: "gemini-3-flash-preview",
           contents: prompt,
           config: {
             temperature: 0,
